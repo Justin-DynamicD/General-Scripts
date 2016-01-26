@@ -1,0 +1,174 @@
+'----------------------------------------------------------------------------
+'
+' mapdrive.vbs
+' VBScript logon script program.
+'
+'----------------------------------------------------------------------------
+
+
+Option Explicit
+
+Dim objNetwork, objSysInfo, strUserDN
+Dim objGroupList, objUser, objFSO
+Dim strComputerDN, objComputer
+Dim strDFSPath
+
+Set objNetwork = CreateObject("Wscript.Network")
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+Set objSysInfo = CreateObject("ADSystemInfo")
+strUserDN = objSysInfo.userName
+strComputerDN = objSysInfo.computerName
+strDFSPath = "\\nrpi.local\shared_files\"
+
+' Bind to the user and computer objects with the LDAP provider.
+Set objUser = GetObject("LDAP://" & strUserDN)
+Set objComputer = GetObject("LDAP://" & strComputerDN)
+
+'----------------------------------------------------------------------------
+'
+' Map a network drive if the user is a member of the group.
+'
+'----------------------------------------------------------------------------
+
+If IsMember(objUser, "HR-Human Resources") Then
+  MapDrive "S:", strDFSPath & "Human Resources"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "SLS-Sales & Buying-NRPI") Then
+  MapDrive "S:", strDFSPath & "Sales & Buying NRPI"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "SLS-Sales & Buying-NRLL") Then
+  MapDrive "S:", strDFSPath & "Sales & Buying NRLL"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "SLS-Travel-NRPI") Then
+  MapDrive "S:", strDFSPath & "Travel"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "FIN-Financing Team") Then
+  MapDrive "S:", strDFSPath & "Finance"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "LGL-Legal") Then
+  MapDrive "S:", strDFSPath & "Legal"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "EC-Escrow & Compliance") Then
+  MapDrive "S:", strDFSPath & "Escrow & Compliance"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+If IsMember(objUser, "AUC-Land Auction Team") Then
+  MapDrive "S:", strDFSPath & "Land Auction"
+  MapDrive "T:", strDFSPath & "Common"
+End If
+
+'----------------------------------------------------------------------------
+'
+' Script Cleanup.
+'
+'----------------------------------------------------------------------------
+
+Set objNetwork = Nothing
+Set objFSO = Nothing
+Set objSysInfo = Nothing
+Set objGroupList = Nothing
+Set objUser = Nothing
+Set objComputer = Nothing
+
+'----------------------------------------------------------------------------
+'
+'Custom Called Functions Below this Point.  When in doubt, don't touch.
+'
+'----------------------------------------------------------------------------
+
+Function IsMember(objADObject, strGroup)
+' Function to test for group membership.
+' objGroupList is a dictionary object with global scope.
+
+  If IsEmpty(objGroupList) Then
+    Set objGroupList = CreateObject("Scripting.Dictionary")
+  End If
+  If Not objGroupList.Exists(objADObject.sAMAccountName & "\") Then
+    Call LoadGroups(objADObject, objADObject)
+    objGroupList(objADObject.sAMAccountName & "\") = True
+  End If
+  IsMember = objGroupList.Exists(objADObject.sAMAccountName & "\" _
+    & strGroup)
+End Function
+
+Sub LoadGroups(objPriObject, objADSubObject)
+' Recursive subroutine to populate dictionary object objGroupList.
+
+  Dim colstrGroups, objGroup, j
+
+  objGroupList.CompareMode = vbTextCompare
+  colstrGroups = objADSubObject.memberOf
+  If IsEmpty(colstrGroups) Then
+    Exit Sub
+  End If
+  If TypeName(colstrGroups) = "String" Then
+    Set objGroup = GetObject("LDAP://" & colstrGroups)
+    If Not objGroupList.Exists(objPriObject.sAMAccountName & "\" _
+        & objGroup.sAMAccountName) Then
+      objGroupList(objPriObject.sAMAccountName & "\" _
+        & objGroup.sAMAccountName) = True
+      Call LoadGroups(objPriObject, objGroup)
+    End If
+    Set objGroup = Nothing
+    Exit Sub
+  End If
+  For j = 0 To UBound(colstrGroups)
+    Set objGroup = GetObject("LDAP://" & colstrGroups(j))
+    If Not objGroupList.Exists(objPriObject.sAMAccountName & "\" _
+        & objGroup.sAMAccountName) Then
+      objGroupList(objPriObject.sAMAccountName & "\" _
+        & objGroup.sAMAccountName) = True
+      Call LoadGroups(objPriObject, objGroup)
+    End If
+  Next
+  Set objGroup = Nothing
+End Sub
+
+Function MapDrive(strDrive, strShare)
+' Function to map network share to a drive letter.
+' If the drive letter specified is already in use, the function
+' attempts to remove the network connection.
+' objFSO is the File System Object, with global scope.
+' objNetwork is the Network object, with global scope.
+' Returns True if drive mapped, False otherwise.
+
+  Dim objDrive
+
+  On Error Resume Next
+  If objFSO.DriveExists(strDrive) Then
+    Set objDrive = objFSO.GetDrive(strDrive)
+    If Err.Number <> 0 Then
+      On Error GoTo 0
+      MapDrive = False
+      Exit Function
+    End If
+    If CBool(objDrive.DriveType = 3) Then
+      objNetwork.RemoveNetworkDrive strDrive, True, True
+    Else
+      MapDrive = False
+      Exit Function
+    End If
+    Set objDrive = Nothing
+  End If
+  objNetwork.MapNetworkDrive strDrive, strShare
+  If Err.Number = 0 Then
+    MapDrive = True
+  Else
+    Err.Clear
+    MapDrive = False
+  End If
+  On Error GoTo 0
+End Function

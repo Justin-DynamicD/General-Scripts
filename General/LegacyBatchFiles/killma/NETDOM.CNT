@@ -1,0 +1,18 @@
+:Base Netdom.hlp
+:Title Netdom Help
+1 Netdom Overview=IDH_OVW>medium
+1 Using Netdom
+2 Netdom Syntax=IDH_Syntax>big
+2 Netdom Commands
+3 Netdom Member=IDH_Member>medium
+3 Netdom BDC=IDH_BDC>medium
+3 Netdom Resource=IDH_Resource>medium
+3 Netdom Master=IDH_Master>medium
+3 Netdom Query=IDH_Query>medium
+2 Examples
+3 Joining a Domain=IDH_JD>proc4
+3 Establishing a Trust Relationship=IDH_BTR>proc4
+3 Querying a Computer Role within a Domain=IDH_QCR>proc4
+3 Resetting a BDC Secure Channel=IDH_RBC>proc4
+3 Resetting a Domain Member Secure Channel=IDH_RDC>proc4
+3 Resetting a Trust Relationship Secure Channel=IDH_RTC>proc4

@@ -1,0 +1,1 @@
+NETDOM /d:%dom% MEMBER %1 /DELETE
