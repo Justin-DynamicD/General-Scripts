@@ -68,8 +68,9 @@ param(
 
 #Grab Environment Varibales
 $IsDomainController = If ((Get-WmiObject win32_computersystem).domainrole -gt "3") {$true} else {$false}
-$DomainName = (Get-ADDomain).NetBIOSName
-$DomainFQDN = (Get-ADDomain).DNSRoot
+$DomainFQDN = (Get-WmiObject win32_computersystem).Domain
+$DomainName = (gwmi win32_NTdomain | Where-Object {$_.DNSForestName -eq $DomainFQDN}).DomainName
+
 
 #Verify $SafeModePassword is present if uninstall or $DFSOnly isn't set
 If ((!$DFSOnly -or ($Uninstall -and $IsDomainController) -or (!$Uninstall -and !$IsDomainController)) -and !$SafeModePassword) {
@@ -123,7 +124,7 @@ If (!$Uninstall) {
 If (!$IsDomainController -and !$Uninstall -and !$DFSOnly) {
     If (!$Unattend) {[System.Windows.Forms.MessageBox]::Show("The Domain Controller role is about to be installed.  This will cause your server to reboot when replication completes.  Please re-run this script to finish installation of servies that depend on the DC.", "Status")}
     Else {Write-Verbose "System is being promoted to a DC and will reboot when complete..."}
-    Install-ADDSDomainController -InstallDns -DomainName $DomainFQDN -SafeModeAdministratorPassword $SafeModePassword
+    Install-ADDSDomainController -InstallDns -DomainName $DomainFQDN -SafeModeAdministratorPassword $SafeModePassword -force
     break
     }
 
@@ -149,6 +150,6 @@ Else {
 If ($IsDomainController -and $Uninstall -and !$DFSOnly) {
     If (!$Unattend) {[System.Windows.Forms.MessageBox]::Show("The Domain Controller role is about to be demoted.  This will cause your server to reboot when replication completes.", "Status")}
     Else {write-verbose "Server is being demoted, a reboot will occur shortly"}
-    Uninstall-ADDSDomainController -LocalAdministratorPassword $SafeModePassword
+    Uninstall-ADDSDomainController -LocalAdministratorPassword $SafeModePassword -force
     break
     }
