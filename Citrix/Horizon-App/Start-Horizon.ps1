@@ -3,10 +3,10 @@ $Horizon = "legaclt.exe"
 $HorizonPath = "C:\Users\Public\Rocket Software\LegaSuite Windows Client\7.2456.1.34"
 $HorizonArguements = '/h10.118.32.30 /GWorD="'+$HorizonPath+'\Production" /M2924 /GPanR=1 /GFonR=1 /GDisPR=1 /GCCSID=37 /GShowEmulator=1 /GMAIWS=59 /Gdevns=off'
 $CSVFile = "Workstation-Mapping.csv"
-$CSVFilePath = ".\"
+$CSVFilePath = $PSScriptRoot
 [switch]$CreateCSVIfMissing = $false
 $WSTemplate = "WS-Template.ws"
-$WSTemplatePath = ".\"
+$WSTemplatePath = $PSScriptRoot
 $TempPath = $env:TEMP
 [switch]$DoNotCleanupTemp = $false
 
