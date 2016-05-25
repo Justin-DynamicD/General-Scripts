@@ -26,7 +26,7 @@ If(!(Test-Path -Path ($FileName)) -and ($CreateCSVIfMissing)) {
 elseif (!(Test-Path -Path ($FileName))) {
     Write-Error "$FileName not found.  Please update the script." -ErrorAction Stop
     }
-$CSVData = (import-csv $FileName | where-object {$_.WorkstationName -eq $env:computername})[0] #<-- if more than one is found, only grab the first one!
+$CSVData = (import-csv $FileName | where-object {$_.WorkstationName -eq $env:computername})[0]
 
 #Rebuild the Horizon launch Arguements adding the DJNumber then launch the program
 $FileName = $HorizonPath+"\"+$Horizon
