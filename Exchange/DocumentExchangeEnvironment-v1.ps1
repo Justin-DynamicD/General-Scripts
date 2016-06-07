@@ -170,7 +170,11 @@ $HTML += '
            <table border="2">
             <tr>
                 <td><h4>Database Name</h4></td>
+                <td><h4>RPC CAS Server</h4></td>
                 <td><h4>Hosting Server</h4></td>
+                <td><h4>EDB File Path</h4></td>
+                <td><h4>Log Folder Path</h4></td>
+                <td><h4>Circular Logging</h4></td>
                 <td><h4>Copies (Activation Preference)</h4></td>
             </tr>'
 
@@ -178,18 +182,25 @@ $DAGDatabases = Get-MailboxDatabase | where {$_.MasterServerOrAvailabilityGroup 
 foreach ($DAGDB in $DAGDatabases)
 {
 $DBName = $DAGDB.Name
+$DBRPCCAS = $DAGDB.RPCClientAccessServer
 $DBHostingServer = $DAGDB.Server.Name
+$DBEDB = $DAGDB.EDBFilePath.PathName
+$DBLog = $DAGDB.LogFolderPath.PathName
+$DBCircularLogging = $DAGDB.CircularLoggingEnabled
 $HTML +='<tr>
             <td>' + $DBName + '</td>
-            <td>' + $DBHostingServer + '</td>
+            <td>' + $DBRPCCAS + '</td>
+            <td>' + $DBEDB + '</td>
+            <td>' + $DBLog + '</td>
+            <td>' + $DBCircularLogging + '</td>
             <td><table>'
 
 $DBCopies = $DAGDB.ActivationPreference
 foreach ($DBCopy in $DBCopies)
 {
-$DBCopyHost = $DBCopy.Key.Name
-$DBCopyPriority = $DBCopy.Value
-$HTML += '<tr><td>' + $DBCopyHost + ' (' + $DBCopyPriority + ')</td></tr>'
+    $DBCopyHost = $DBCopy.Key.Name
+    $DBCopyPriority = $DBCopy.Value
+    $HTML += '<tr><td>' + $DBCopyHost + ' (' + $DBCopyPriority + ')</td></tr>'
 }
 $HTML += '</table></td></tr>'
 }
@@ -213,12 +224,12 @@ $HTML +='<h3><a id="DatabaseInformation"><b>Databases Information</b></a></h3>
 	<tr>
 		<td style="height: 23px"><h4>Database Name</h4></td>
 		<td style="height: 23px"><h4>Hosted On</h4></td>
-        <td style="height: 23px"><h4>EDB File Path</h4></td>
-		<td style="height: 23px"><h4>Log Folder Path</h4></td>
-		<td style="height: 23px"><h4>RPC Client Access Server</h4></td>
-        <td style="height: 23px"><h4>Offline Address Book</h4></td>
+        <td style="height: 23px"><h4>Issue Warning Quota</h4></td>
+		<td style="height: 23px"><h4>Prohibit Send Quota</h4></td>
+		<td style="height: 23px"><h4>Prohibit Send/Receive Quota</h4></td>
         <td style="height: 23px"><h4>Deleted Item Retention</h4></td>
-        <td style="height: 23px"><h4>Circular Logging</h4></td>
+        <td style="height: 23px"><h4>Offline Address Book</h4></td>
+        <td style="height: 23px"><h4>Public Folder Database</h4></td>
 	</tr>
 '
 
@@ -226,23 +237,23 @@ foreach ($Database in $Databases)
 {
 $DBName = $Database.Name
 $DBServer = $Database.ServerName
-$DBEdbPath = $Database.EdbFilePath.PathName
-$DBLogPath = $Database.LogFolderPath.PathName
-$DBRpcCAS = $Database.RpcClientAccessServer
-$DBOAB = $Database.OfflineAddressBook
+$DBWarn = $Database.IssueWarningQuota
+$DBSQ = $Database.ProhibitSendQuota
+$DBSRQ = $Database.ProhibitSendReceiveQuota
 $DBDeletedItems = $Database.DeletedItemRetention.Days
-$DBCircularLogging = $Database.CircularLoggingEnabled
+$DBOAB = $Database.OfflineAddressBook
+$DBPF = $Database.PublicFolderDatabase
 
 $HTML += '
     <tr>
 		<td style="height: 23px">' + $DBName + '</td>
 		<td style="height: 23px">' + $DBServer + '</td>
-		<td style="height: 23px">' + $DBEdbPath + '</td>
-		<td style="height: 23px">' + $DBLogPath + '</td>
-        <td style="height: 23px">' + $DBRpcCAS + '</td>
-        <td style="height: 23px">' + $DBOAB + '</td>
+		<td style="height: 23px">' + $DBWarn + '</td>
+		<td style="height: 23px">' + $DBSQ + '</td>
+        <td style="height: 23px">' + $DBSRQ + '</td>
 		<td style="height: 23px">' + $DBDeletedItems + '</td>
-        <td style="height: 23px">' + $DBCircularLogging + '</td>
+        <td style="height: 23px">' + $DBOAB + '</td>
+        <td style="height: 23px">' + $DBPF + '</td>
     </tr>
 '
 }
