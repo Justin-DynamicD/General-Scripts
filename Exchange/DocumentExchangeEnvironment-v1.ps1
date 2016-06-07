@@ -190,6 +190,7 @@ $DBCircularLogging = $DAGDB.CircularLoggingEnabled
 $HTML +='<tr>
             <td>' + $DBName + '</td>
             <td>' + $DBRPCCAS + '</td>
+            <td>' + $DBHostingServer + '</td>
             <td>' + $DBEDB + '</td>
             <td>' + $DBLog + '</td>
             <td>' + $DBCircularLogging + '</td>
