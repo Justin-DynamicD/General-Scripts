@@ -519,6 +519,7 @@ $HTML +='<h3><a id="SendConnectors"><b>Send Connectors</b></a></h3>
 		<td style="height: 23px"><h4>Connector Name</h4></td>
 		<td style="height: 23px"><h4>Address Spaces</h4></td>
         <td style="height: 23px"><h4>Source Servers</h4></td>
+        <td style="height: 23px"><h4>Smart Hosts</h4></td>
 		<td style="height: 23px"><h4>MaxMessageSize</h4></td>
 	</tr>
 '
@@ -546,6 +547,7 @@ $HTML +='</td>
                 $Count++
             }
 $HTML +='</td>
+		<td style="height: 23px">' + $SendConnector.SmartHostsString + '</td>
 		<td style="height: 23px">' + $SendConnector.MaxMessageSize.Value.ToMB() + ' MB</td>
     </tr>
 '
