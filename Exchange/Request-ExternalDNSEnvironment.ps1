@@ -14,7 +14,7 @@ Param
 #Validate an input has been defined and import
 If (!$DomainList -and !$DomainName) {Write-Error "Neither DomainList nor DomainName have been specified.  Nothing to process." -ErrorAction "Stop"}
 If ($DomainList -and $DomainName) {Write-Error "You cannot use both DomainList and DomainName simultaneously.  Stoping script." -ErrorAction "Stop"}
-If ($DomainList) {$WorkingList = import-csv $DomainList}
+If ($DomainList) {$WorkingList = (import-csv $DomainList -header Domain).Domain}
 Else {$WorkingList = $DomainName}
 
 #Wipe and set ReturnSet
@@ -66,7 +66,7 @@ ForEach ($Name in $WorkingList) {
 
     #Return Values
     $return = New-Object -TypeName PSCustomObject -Property @{
-        DomainName = $Name
+        DomainName = [String]$Name
         AutoDiscover = $autoDiscover
         MSOID = $msoid
         SPFRecord = $spfRecord
