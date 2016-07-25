@@ -8,13 +8,13 @@ Param
     [string]$DomainList,
 
     [Parameter(Mandatory=$false)]
-    [string]$CSVFile = ".\DNSResults.csv"
+    [string]$CSVExport
 )
 
 #Validate an input has been defined and import
 If (!$DomainList -and !$DomainName) {Write-Error "Neither DomainList nor DomainName have been specified.  Nothing to process." -ErrorAction "Stop"}
 If ($DomainList -and $DomainName) {Write-Error "You cannot use both DomainList and DomainName simultaneously.  Stoping script." -ErrorAction "Stop"}
-If ($DomainList) {$WorkingList = import-csv $CSVFile}
+If ($DomainList) {$WorkingList = import-csv $DomainList}
 Else {$WorkingList = $DomainName}
 
 #Wipe and set ReturnSet
@@ -57,7 +57,7 @@ ForEach ($Name in $WorkingList) {
 
     #Lookup spf record
     try {
-        $spfRecord = (Resolve-DnsName -Name $Name -Type TXT -ErrorAction "Stop" | Where-Object {$_.Strings -like "v=spf1*"}).Strings
+        [string]$spfRecord = (Resolve-DnsName -Name $Name -Type TXT -ErrorAction "Stop" | Where-Object {$_.Strings -like "v=spf1*"}).Strings
         If ($spfRecord -eq $null) {$spfRecord = "Not Found"}    
     }
     catch {
@@ -77,4 +77,10 @@ ForEach ($Name in $WorkingList) {
 
 } #End ForEachLoop
 
-return $ReturnSet
+#Return in Appropriate Format
+If ($CSVExport) {
+    $ReturnSet | export-csv $CSVExport
+}
+Else {
+    return $ReturnSet
+}
