@@ -71,6 +71,7 @@ function Initialize-O365User
         }  
 } #End Function
 
+
 function Move-O365User {
 
     param (
