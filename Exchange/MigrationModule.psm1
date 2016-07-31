@@ -74,9 +74,13 @@ function Initialize-O365User
 function Move-O365User {
 
     param (
-        # Parameter help description
-        [Parameter(AttributeValues)]
-        [string]$ParameterName
+       # UserName this is the name of the account you wish to prepare for migration
+        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('user')] 
+        [String]$UserName,
+
+        # Credentials These are the credentials require to sign into your O365 tenant
+        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('creds')]
+        [PsCredential]$Credentials
     )
 
     #Connect to the Exchange online environment and clobber all modules
