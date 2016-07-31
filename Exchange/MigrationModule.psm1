@@ -22,9 +22,6 @@
 #>
 function Initialize-O365User
 {
-    [CmdletBinding(SupportsShouldProcess=$true, PositionalBinding=$true, ConfirmImpact='Medium')]
-    [OutputType([String])]
-
     Param
     (
         # UserName this is the name of the account you wish to prepare for migration
@@ -37,20 +34,59 @@ function Initialize-O365User
     
     )
 
-    Begin
-    {
-        #Connect to the Exchagne online environment and clobber
-        $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Credentials -Authentication Basic -AllowRedirection
-        $importResults = Import-PSSession $mSOLSession -AllowClobber
-        Write-Verbose $importResults
-    }
-    Process
-    {
-        if ($pscmdlet.ShouldProcess('Target', 'Operation'))
-        {
+    #Variables specific to client
+    $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal"
+
+    #Load AD modules
+    If (!(Get-module ActiveDirectory)) {
+        Try {import-module ActiveDirectory}
+        catch {write-error "Cannot import ActiveDirecotry modules, please make sure htey are avialable" -ErrorAction "Stop"}
         }
-    }
-    End
-    {
-    }
-}
+    
+    #Connect to the Exchange online environment and clobber all modules
+    If (!(Get-module mSOLSession)) {
+        Try {
+            $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Credentials -Authentication Basic -AllowRedirection
+            $importResults = Import-PSSession $mSOLSession -AllowClobber
+            Write-Verbose $importResults
+            } #End Try
+        Catch {write-error "Cannot import MSOL modules, please make sure they are avialable" -ErrorAction "Stop"}
+        }
+
+    #Check each user to be a member of the groups
+    $members=@()
+    [bool]$isUpdated = $false
+    ForEach ($group in $groupList) {
+        $members = Get-ADGroupMember -Identity $group -Recursive | Select -ExpandProperty Name
+        If ($members -notcontains $UserName) {
+            Write-Verbose "adding $UserName to $group"
+            Add-ADGroupMember -Identity $group -Members $UserName
+            $isUpdated = $true
+            } #End Match
+        } #End ForEach
+
+    #If any changes were made, output warning
+    If ($isUpdated) {
+        Write-Warning "groups have been updated, please allow replciation to complete before perfoming actual migration"
+        }  
+} #End Function
+
+function Move-O365User {
+
+    param (
+        # Parameter help description
+        [Parameter(AttributeValues)]
+        [string]$ParameterName
+    )
+
+    #Connect to the Exchange online environment and clobber all modules
+    If (!(Get-module mSOLSession)) {
+        Try {
+            $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Credentials -Authentication Basic -AllowRedirection
+            $importResults = Import-PSSession $mSOLSession -AllowClobber
+            Write-Verbose $importResults
+            } #End Try
+        Catch {write-error "Cannot import MSOL modules, please make sure they are avialable" -ErrorAction "Stop"}
+        }  
+
+} #End Function
