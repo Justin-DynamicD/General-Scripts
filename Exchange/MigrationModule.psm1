@@ -26,32 +26,18 @@ function Initialize-O365User
     (
         # UserName this is the name of the account you wish to prepare for migration
         [Parameter(Mandatory=$true)] 
-        [String]$UserName,
-
-        # Credentials These are the credentials require to sign into your O365 tenant
-        [Parameter(Mandatory=$true)]
-        [PsCredential]$Credentials
-    
+        [String]$UserName
     )
 
     #Variables specific to client
-    $groupList = "PARAMOUNT\Office 365 Enrollment", "PARAMOUNT\Office 365 Enterprise Cal"
+    $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal"
+    $groupDomain = "corp.ad.viacom.com"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
 
     #Load AD modules
     If (!(Get-module ActiveDirectory)) {
         Try {import-module ActiveDirectory}
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure htey are avialable" -ErrorAction "Stop"}
-        }
-    
-    #Connect to the Exchange online environment and clobber all modules
-    If (!(Get-PSSession ps.outlook.com)) {
-        Try {
-            $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Credentials -Authentication Basic -AllowRedirection
-            $importResults = Import-PSSession $mSOLSession -AllowClobber
-            Write-Verbose $importResults
-            } #End Try
-        Catch {write-error "Cannot import MSOL modules, please make sure they are avialable" -ErrorAction "Stop"}
         }
 
     #Get CurrentUser and needed SMTP values
@@ -75,10 +61,14 @@ function Initialize-O365User
     $members=@()
     [bool]$isUpdated = $false
     ForEach ($group in $groupList) {
-        $members = Get-ADGroupMember -Identity $group -Recursive | Select -ExpandProperty Name
+        try {
+            $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty Name
+            }
+        Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
+
         If ($members -notcontains $UserName) {
             Write-Verbose "adding $UserName to $group"
-            Add-ADGroupMember -Identity $group -Members $UserName
+            Add-ADGroupMember -Identity $group -server $groupDomain -Members $UserName
             $isUpdated = $true
             } #End Match
         } #End ForEach
@@ -117,13 +107,19 @@ function Move-O365User {
 
 
     #Connect to the Exchange online environment and clobber all modules
-    If (!(Get-PSSession ps.outlook.com)) {
+    Try {
+        Get-PSSession ps.outlook.com
+        [bool]$mSOLActive = $true
+        }
+    Catch {[bool]$mSOLActive = $false}
+
+    If (!$mSOLActive) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
             $importResults = Import-PSSession $mSOLSession -AllowClobber
             Write-Verbose $importResults
             } #End Try
-        Catch {write-error "Cannot import MSOL modules, please make sure they are avialable" -ErrorAction "Stop"}
+        Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }  
     
     #Variables specific to client
