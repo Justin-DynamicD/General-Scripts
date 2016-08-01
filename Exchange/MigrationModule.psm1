@@ -104,7 +104,7 @@ function Move-O365User {
     Try {
         $currentUser = get-aduser -filter {name -eq $UserName} -ErrorAction "Stop"
         $currentMailbox = get-mailbox $UserName -ErrorAction "Stop"
-        $primarySMTP = $currentMailbox.primarysmtpaddress -ErrorAction "Stop"
+        $primarySMTP = $currentMailbox.primarysmtpaddress
         }
     Catch {
         write-error "Cannot find either the user account or mailbox for $UserName" -ErrorAction "Stop"
