@@ -26,7 +26,11 @@ function Initialize-O365User
     (
         # UserName this is the name of the account you wish to prepare for migration
         [Parameter(Mandatory=$true)] 
-        [String]$UserName
+        [String]$UserName,
+
+        # DomainName this is the name of the account you wish to prepare for migration
+        [Parameter(Mandatory=$false)] 
+        [String]$DomainName = "paramount.ad.viacom.com"
     )
 
     #Variables specific to client
@@ -41,9 +45,16 @@ function Initialize-O365User
         }
 
     #Get CurrentUser and needed SMTP values
-    $currentUser = get-aduser -filter {name -eq $UserName}
-    $currentMailbox = get-mailbox $UserName
-    $newProxy = "smtp:"+$UserName+"@"+$onlineSMTP
+    Try {
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+        $currentUser = get-aduser -server $DomainName -filter {name -eq $UserName} -ErrorAction "Stop"
+        $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
+        $newProxy = "smtp:"+$UserName+"@"+$onlineSMTP
+        }
+    Catch {
+        write-error "Cannot find either the user account or mailbox for $UserName" -ErrorAction "Stop"
+        }
+
 
     #Check UPN to primary address
     IF ($currentUser.UserPrincipalName -ne $currentMailbox.primarysmtpaddress) {
@@ -87,6 +98,10 @@ function Move-O365User {
         [Parameter(Mandatory=$true)]
         [string]$UserName,
 
+        # DomainName this is the name of the account you wish to prepare for migration
+        [Parameter(Mandatory=$false)] 
+        [String]$DomainName = "paramount.ad.viacom.com",
+
         # RemoteHostName These are valid endpoints for replicating to the cloud
         [Parameter(Mandatory=$false)][ValidateSet("owa.viacom.com","owa.mtvne.com","mail.paramount.com")] 
         [string]$RemoteHostName = "owa.viacom.com",
@@ -102,8 +117,9 @@ function Move-O365User {
 
     #Get CurrentUser and needed SMTP values
     Try {
-        $currentUser = get-aduser -filter {name -eq $UserName} -ErrorAction "Stop"
-        $currentMailbox = get-mailbox $UserName -ErrorAction "Stop"
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+        $currentUser = get-aduser -server $DomainName -filter {name -eq $UserName} -ErrorAction "Stop"
+        $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
         $primarySMTP = $currentMailbox.primarysmtpaddress
         }
     Catch {
@@ -114,7 +130,7 @@ function Move-O365User {
     [bool]$mSOLActive = $false
     $search = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
     If ($search -ne $NULL) {[bool]$mSOLActive = $false}
-    
+
     If (!$mSOLActive) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
