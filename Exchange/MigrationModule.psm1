@@ -25,17 +25,17 @@ function Initialize-O365User
     Param
     (
         # UserName this is the name of the account you wish to prepare for migration
-        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('user')] 
+        [Parameter(Mandatory=$true)] 
         [String]$UserName,
 
         # Credentials These are the credentials require to sign into your O365 tenant
-        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('creds')]
+        [Parameter(Mandatory=$true)]
         [PsCredential]$Credentials
     
     )
 
     #Variables specific to client
-    $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal"
+    $groupList = "PARAMOUNT\Office 365 Enrollment", "PARAMOUNT\Office 365 Enterprise Cal"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
 
     #Load AD modules
@@ -45,7 +45,7 @@ function Initialize-O365User
         }
     
     #Connect to the Exchange online environment and clobber all modules
-    If (!(Get-module mSOLSession)) {
+    If (!(Get-PSSession ps.outlook.com)) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $Credentials -Authentication Basic -AllowRedirection
             $importResults = Import-PSSession $mSOLSession -AllowClobber
@@ -94,24 +94,30 @@ function Move-O365User {
 
     param (
         # UserName this is the name of the account you wish to prepare for migration
-        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('user')] 
-        [String]$UserName,
+        [Parameter(Mandatory=$true)]
+        [string]$UserName,
 
         # RemoteHostName These are valid endpoints for replicating to the cloud
-        [Parameter(Mandatory=$false)][ValidateSet("owa.viacom.com","owa.mtvne.com","mail.paramount.com")][Alias('RHN')] 
-        [String]$RemoteHostName = "owa.viacom.com",
+        [Parameter(Mandatory=$false)][ValidateSet("owa.viacom.com","owa.mtvne.com","mail.paramount.com")] 
+        [string]$RemoteHostName = "owa.viacom.com",
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
-        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('ocreds')]
-        [PsCredential]$OnlineCredentials,
+        [Parameter(Mandatory=$true)]
+        [pscredential]$OnlineCredentials,
 
         # LocalCredentials These are the credentials require to sign into your Exchange Environment
-        [Parameter(Mandatory=$true)][ValidateNotNullOrEmpty()][Alias('lcreds')]
-        [PsCredential]$LocalCredentials
+        [Parameter(Mandatory=$true)]
+        [pscredential]$LocalCredentials
     )
 
+    #Get CurrentUser and needed SMTP values
+    $currentUser = get-aduser -filter {name -eq $UserName}
+    $currentMailbox = get-mailbox $UserName
+    $primarySMTP = $currentMailbox.primarysmtpaddress
+
+
     #Connect to the Exchange online environment and clobber all modules
-    If (!(Get-module mSOLSession)) {
+    If (!(Get-PSSession ps.outlook.com)) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
             $importResults = Import-PSSession $mSOLSession -AllowClobber
@@ -124,6 +130,6 @@ function Move-O365User {
     $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
 
     # Do the move
-    New-MoveRequest -Identity $UserName -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
+    New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
 
 } #End Function
