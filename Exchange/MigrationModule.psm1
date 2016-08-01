@@ -108,8 +108,8 @@ function Move-O365User {
 
     #Connect to the Exchange online environment and clobber all modules
     Try {
-        Get-PSSession ps.outlook.com
         [bool]$mSOLActive = $true
+        Get-PSSession ps.outlook.com
         }
     Catch {[bool]$mSOLActive = $false}
 
