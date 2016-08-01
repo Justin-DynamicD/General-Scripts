@@ -101,15 +101,19 @@ function Move-O365User {
     )
 
     #Get CurrentUser and needed SMTP values
-    $currentUser = get-aduser -filter {name -eq $UserName}
-    $currentMailbox = get-mailbox $UserName
-    $primarySMTP = $currentMailbox.primarysmtpaddress
-
+    Try {
+        $currentUser = get-aduser -filter {name -eq $UserName} -ErrorAction "Stop"
+        $currentMailbox = get-mailbox $UserName -ErrorAction "Stop"
+        $primarySMTP = $currentMailbox.primarysmtpaddress -ErrorAction "Stop"
+        }
+    Catch {
+        write-error "Cannot find either the user account or mailbox for $UserName" -ErrorAction "Stop"
+        }
 
     #Connect to the Exchange online environment and clobber all modules
     Try {
         [bool]$mSOLActive = $true
-        Get-PSSession ps.outlook.com
+        Get-PSSession ps.outlook.com -ErrorAction "Stop"
         }
     Catch {[bool]$mSOLActive = $false}
 
