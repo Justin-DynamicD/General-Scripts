@@ -111,12 +111,10 @@ function Move-O365User {
         }
 
     #Connect to the Exchange online environment and clobber all modules
-    Try {
-        [bool]$mSOLActive = $true
-        Get-PSSession ps.outlook.com -ErrorAction "Stop"
-        }
-    Catch {[bool]$mSOLActive = $false}
-
+    [bool]$mSOLActive = $false
+    $search = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
+    If ($search -ne $NULL) {[bool]$mSOLActive = $false}
+    
     If (!$mSOLActive) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
