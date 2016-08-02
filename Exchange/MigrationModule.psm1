@@ -115,6 +115,12 @@ function Move-O365User {
         [pscredential]$LocalCredentials
     )
 
+    #Load AD modules
+    If (!(Get-module ActiveDirectory)) {
+        Try {import-module ActiveDirectory}
+        catch {write-error "Cannot import ActiveDirecotry modules, please make sure htey are available" -ErrorAction "Stop"}
+        }
+
     #Get CurrentUser and needed SMTP values
     Try {
         Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
@@ -126,10 +132,23 @@ function Move-O365User {
         write-error "Cannot find either the user account or mailbox for $UserName" -ErrorAction "Stop"
         }
 
+    #Grab current SendLimits
+    If ($currentMailbox.UseDatabaseQuotaDefaults) {
+        $DB = get-mailbox $currentMailbox.database.name
+        IF ($DB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $DB.ProhibitSendReceiveQuota.Value}
+        IF ($DB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $DB.ProhibitSendQuota.Value}
+        IF ($DB.IssueWarningQuota) {$DBWarning = "Unlimited"} Else {$DBWarning = $DB.IssueWarningQuota.Value}    
+        }
+    Else {
+        IF ($currentMailbox.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $currentMailbox.ProhibitSendReceiveQuota.Value}
+        IF ($currentMailbox.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $currentMailbox.ProhibitSendQuota.Value}
+        IF ($currentMailbox.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $currentMailbox.IssueWarningQuota.Value}    
+        }
+
     #Connect to the Exchange online environment and clobber all modules
     [bool]$mSOLActive = $false
     $search = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
-    If ($search -ne $NULL) {[bool]$mSOLActive = $false}
+    If ($search -ne $NULL) {[bool]$mSOLActive = $true}
 
     If (!$mSOLActive) {
         Try {
@@ -144,6 +163,15 @@ function Move-O365User {
     $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
 
     # Do the move
+    Write-Verbose "Moving user to O365"
     New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
 
+    #Update Send Quotas
+    Write-Verbose "Updating Storage Quotas"
+    set-mailbox $primarySMTP -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+
+    #Disable Clutter
+    Write Verbose "Disabling Clutter"
+    Set-Clutter -Identity $primarySMTP -Enable $false
+    
 } #End Function
