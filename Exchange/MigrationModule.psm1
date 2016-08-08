@@ -1,25 +1,4 @@
-<#
-.Synopsis
-   Short description
-.DESCRIPTION
-   Long description
-.EXAMPLE
-   Example of how to use this cmdlet
-.EXAMPLE
-   Another example of how to use this cmdlet
-.INPUTS
-   Inputs to this cmdlet (if any)
-.OUTPUTS
-   Output from this cmdlet (if any)
-.NOTES
-   General notes
-.COMPONENT
-   The component this cmdlet belongs to
-.ROLE
-   The role this cmdlet belongs to
-.FUNCTIONALITY
-   The functionality that best describes this cmdlet
-#>
+
 function Initialize-O365User
 {
     Param
@@ -92,15 +71,37 @@ function Initialize-O365User
 
 
 function Move-O365User {
+    <#
+    .Synopsis
+    Short description
+    .DESCRIPTION
+    Long description
+    .EXAMPLE
+    Example of how to use this cmdlet
+    .EXAMPLE
+    Another example of how to use this cmdlet
+    .INPUTS
+    Inputs to this cmdlet (if any)
+    .OUTPUTS
+    Output from this cmdlet (if any)
+    .NOTES
+    General notes
+    .COMPONENT
+    The component this cmdlet belongs to
+    .ROLE
+    The role this cmdlet belongs to
+    .FUNCTIONALITY
+    The functionality that best describes this cmdlet
+    #>
 
     param (
         # UserName this is the name of the account you wish to prepare for migration
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [string]$UserName,
 
-        # DomainName this is the name of the account you wish to prepare for migration
-        [Parameter(Mandatory=$false)] 
-        [String]$DomainName = "paramount.ad.viacom.com",
+        # UserList this is a csv file containing usernames and domains for bulk migrations
+        [Parameter(Mandatory=$false)]
+        [string]$UserList,
 
         # RemoteHostName These are valid endpoints for replicating to the cloud
         [Parameter(Mandatory=$false)][ValidateSet("owa.viacom.com","owa.mtvne.com","mail.paramount.com")] 
@@ -108,79 +109,105 @@ function Move-O365User {
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
-        [pscredential]$OnlineCredentials,
+        [System.Management.Automation.PSCredential]$OnlineCredentials,
 
         # LocalCredentials These are the credentials require to sign into your Exchange Environment
         [Parameter(Mandatory=$true)]
-        [pscredential]$LocalCredentials
+        [System.Management.Automation.PSCredential]$LocalCredentials
     )
+
+    #Variables specific to client
+    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
+    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com"
+
+    #Validate parameter combinations are valid
+    If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
+    If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
+    
+    #Import UserList into a workingList
+    If ($UserList) {$workingList = (import-csv $UserList -header UserName).UserName}
+    Else {$workingList = $UserName}
 
     #Load AD modules
     If (!(Get-module ActiveDirectory)) {
         Try {import-module ActiveDirectory}
-        catch {write-error "Cannot import ActiveDirecotry modules, please make sure htey are available" -ErrorAction "Stop"}
+        catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
+    Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
 
-    #Get CurrentUser and needed SMTP values
-    Try {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        $currentUser = get-aduser -server $DomainName -filter {name -eq $UserName} -ErrorAction "Stop"
-        $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
-        $primarySMTP = $currentMailbox.primarysmtpaddress
-        }
-    Catch {
-        write-error "Cannot find either the user account or mailbox for $UserName" -ErrorAction "Stop"
-        }
-
-    #Grab current SendLimits
-    If ($currentMailbox.UseDatabaseQuotaDefaults) {
-        $dB = get-mailbox $currentMailbox.database.name
-        IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
-        IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
-        IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
-
-        Write-Verbose "Updating Storage Quotas"
-        set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
-
-        }
-    
-    <#
-    Else {
-        IF ($currentMailbox.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $currentMailbox.ProhibitSendReceiveQuota.Value}
-        IF ($currentMailbox.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $currentMailbox.ProhibitSendQuota.Value}
-        IF ($currentMailbox.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $currentMailbox.IssueWarningQuota.Value}    
-        }
-    #>
-
-    #Update Send Quotas
-    
-
-    #Connect to the Exchange online environment and clobber all modules
+    #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
-    $search = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
-    If ($search -ne $NULL) {[bool]$mSOLActive = $true}
+    $localSession = Get-PSSession | Where-Object {$_.ComputerName -ne "ps.outlook.com"}
+    $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
+    If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
 
     If (!$mSOLActive) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
-            $importResults = Import-PSSession $mSOLSession -AllowClobber
-            Write-Verbose $importResults
             } #End Try
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
-    Else {
-        $importResults = Import-PSSession $search -AllowClobber
-        }
     
-    #Variables specific to client
-    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
+    #Begin per-user Loop
+    ForEach ($target in workingList) {
 
-    # Do the move
-    Write-Verbose "Moving user to O365"
-    New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
+        #Set Current Session to Local Host
+        IF ($mSOLActive) {
+            Try {
+                $importResults = Import-PSSession $localSession -AllowClobber
+                Write-Verbose $importResults
+                }
+            catch {
+                write-error "can't switch context to local session" -ErrorAction "Stop"
+                }
+            }
 
-    #Disable Clutter
-    Write-Verbose "Disabling Clutter"
-    Set-Clutter -Identity $primarySMTP -Enable $false
-    
+        #Get CurrentUser and needed SMTP values
+        Try {
+            $currentUser = @()
+            ForEach ($domain in $searchDomains) {$currentUser = get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
+            If ($currentUser.count -ne 1) {write-Error -Message "Username found " + $currentUser.count + " matches.  Should only be 1" -ErrorAction "Stop"}
+            $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
+            $primarySMTP = $currentMailbox.primarysmtpaddress
+            }
+        Catch {
+            write-error "Cannot find either the user account or mailbox for $target" -ErrorAction "Stop"
+            }
+
+        #Grab current SendLimits and RetentionPolicy
+        $retentionPolicy = $currentMailbox.RetentionPolicy.Name
+        If ($currentMailbox.UseDatabaseQuotaDefaults) {
+            write-verbose "$UserName storage quotas are being pulled form the database, updating storage quotas"
+            $dB = get-mailbox $currentMailbox.database.name
+            IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
+            IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
+            IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
+
+            set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+            }
+
+        #switch session to mSOL
+        IF (!$mSOLActive) {
+            Try {
+                $importResults = Import-PSSession $mSOLSession -AllowClobber
+                Write-Verbose $importResults
+                }
+            catch {
+                write-error "can't switch context to MSOL session" -ErrorAction "Stop"
+                }
+            }
+
+        # Do the move
+        Write-Verbose "Moving $primarySMTP to O365"
+        New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
+
+        #Update RetentionPolicy
+        Write-Verbose "Applying RetentionPolicy to $primarySMTP"
+        Set-mailbox -Identity $primarySMTP -RetentionPolicy $retentionPolicy
+
+        #Disable Clutter
+        Write-Verbose "Disabling Clutter for $primarySMTP"
+        Set-Clutter -Identity $primarySMTP -Enable $false
+
+    } #End per-user Loop
 } #End Function
