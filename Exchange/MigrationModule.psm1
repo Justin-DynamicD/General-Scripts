@@ -156,6 +156,7 @@ function Move-O365User {
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
                 Write-Verbose $importResults
+                [bool]$mSOLActive = $false
                 }
             catch {
                 write-error "can't switch context to local session" -ErrorAction "Stop"
@@ -191,6 +192,7 @@ function Move-O365User {
             Try {
                 $importResults = Import-PSSession $mSOLSession -AllowClobber
                 Write-Verbose $importResults
+                [bool]$mSOLActive = $true
                 }
             catch {
                 write-error "can't switch context to MSOL session" -ErrorAction "Stop"
