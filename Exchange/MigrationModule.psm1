@@ -149,7 +149,7 @@ function Move-O365User {
         }
     
     #Begin per-user Loop
-    ForEach ($target in workingList) {
+    ForEach ($target in $workingList) {
 
         #Set Current Session to Local Host
         IF ($mSOLActive) {
