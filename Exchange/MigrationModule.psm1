@@ -164,9 +164,10 @@ function Move-O365User {
 
         #Get CurrentUser and needed SMTP values
         Try {
-            $currentUser = @()
-            ForEach ($domain in $searchDomains) {$currentUser = get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
-            If ($currentUser.count -ne 1) {write-Error -Message "Username found " + $currentUser.count + " matches.  Should only be 1" -ErrorAction "Stop"}
+            $currentUserCount = @()
+            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
+            If ($currentUserCount.count -ne 1) {write-Error -Message "Username found " + $currentUserCount.count + " matches.  Should only be 1" -ErrorAction "Stop"}
+            Else {$currentUser = $currentUserCount[0]}
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             $primarySMTP = $currentMailbox.primarysmtpaddress
             }
