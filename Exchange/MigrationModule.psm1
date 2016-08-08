@@ -7,66 +7,117 @@ function Initialize-O365User
         [Parameter(Mandatory=$true)] 
         [String]$UserName,
 
-        # DomainName this is the name of the account you wish to prepare for migration
-        [Parameter(Mandatory=$false)] 
-        [String]$DomainName = "paramount.ad.viacom.com"
+         # UserList this is a csv file containing usernames and domains for bulk migrations
+        [Parameter(Mandatory=$false)]
+        [string]$UserList,
+
+        # OnlineCredentials These are the credentials require to sign into your O365 tenant
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.PSCredential]$OnlineCredentials,
+
+        # LocalCredentials These are the credentials require to sign into your Exchange Environment
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.PSCredential]$LocalCredentials
+
     )
 
     #Variables specific to client
     $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal"
     $groupDomain = "corp.ad.viacom.com"
+    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com","corp.ad.viacom.com"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
+
+    #Validate parameter combinations are valid
+    If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
+    If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
+    
+    #Import UserList into a workingList
+    If ($UserList) {$workingList = (import-csv $UserList -header UserName).UserName}
+    Else {$workingList = $UserName}
 
     #Load AD modules
     If (!(Get-module ActiveDirectory)) {
         Try {import-module ActiveDirectory}
-        catch {write-error "Cannot import ActiveDirecotry modules, please make sure htey are avialable" -ErrorAction "Stop"}
+        catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
+    Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
 
-    #Get CurrentUser and needed SMTP values
-    Try {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        $currentUser = get-aduser -server $DomainName -filter {name -eq $UserName} -ErrorAction "Stop"
-        $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
-        $newProxy = "smtp:"+$UserName+"@"+$onlineSMTP
+    #Connect to the Exchange online environment and track all cmdlets
+    [bool]$mSOLActive = $false
+    $localSession = Get-PSSession | Where-Object {$_.ComputerName -ne "ps.outlook.com"}
+    $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
+    If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
+
+    If (!$mSOLActive) {
+        Try {
+            $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
+            } #End Try
+        Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
-    Catch {
-        write-error "Cannot find either the user account or mailbox for $UserName" -ErrorAction "Stop"
-        }
-
-
-    #Check UPN to primary address
-    IF ($currentUser.UserPrincipalName -ne $currentMailbox.primarysmtpaddress) {
-         Write-Warning "the UPN and primary SMTP do not match.  Please correct"
-    }
     
-    #Check for Proxy Address, add if missing
-    
-    IF ($currentUser.proxyAddresses -notcontains $newProxy) {
-        Write-Verbose "Adding address $newProxy"
-        set-ADUser $UserName -add proxyAddresses = $newProxy
-    }
+    #Begin per-user Loop
+    ForEach ($target in $workingList) {
 
-    #Check each user to be a member of the groups
-    $members=@()
-    [bool]$isUpdated = $false
-    ForEach ($group in $groupList) {
-        try {
-            $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty Name
+        #Set Current Session to Local Host
+        IF ($mSOLActive) {
+            Try {
+                $importResults = Import-PSSession $localSession -AllowClobber
+                Write-Verbose $importResults
+                [bool]$mSOLActive = $false
+                }
+            catch {
+                write-error "can't switch context to local session" -ErrorAction "Stop"
+                }
             }
-        Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
 
-        If ($members -notcontains $UserName) {
-            Write-Verbose "adding $UserName to $group"
-            Add-ADGroupMember -Identity $group -server $groupDomain -Members $UserName
-            $isUpdated = $true
-            } #End Match
-        } #End ForEach
+        #Get CurrentUser and needed SMTP values
+        Try {
+            $currentUserCount = @()
+            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
+            $currentUser = $currentUserCount[0]
+            $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
+            $newProxy = "smtp:"+$UserName+"@"+$onlineSMTP
+            }
+        Catch {
+            write-error "Cannot find either the user account or mailbox for $UserName"
+            continue
+            }
 
-    #If any changes were made, output warning
-    If ($isUpdated) {
-        Write-Warning "groups have been updated, please allow replciation to complete before perfoming actual migration"
-        }  
+
+        #Check UPN to primary address
+        IF ($currentUser.UserPrincipalName -ne $currentMailbox.primarysmtpaddress) {
+            Write-Warning "the UPN and primary SMTP do not match.  Please correct"
+        }
+        
+        #Check for Proxy Address, add if missing
+        
+        IF ($currentUser.proxyAddresses -notcontains $newProxy) {
+            Write-Verbose "Adding address $newProxy"
+            set-ADUser $UserName -add proxyAddresses = $newProxy
+        }
+
+        #Check each user to be a member of the groups
+        $members=@()
+        [bool]$isUpdated = $false
+        ForEach ($group in $groupList) {
+            try {
+                $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty Name
+                }
+            Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
+
+            If ($members -notcontains $currentUser.Name) {
+                Write-Verbose "adding $currentUser.Name to $group"
+                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.Name
+                $isUpdated = $true
+                } #End Match
+            } #End ForEach
+
+        #If any changes were made, output warning
+        If ($isUpdated) {
+            Write-Warning "groups have been updated, please allow replciation to complete before perfoming actual migration"
+            }
+
+    } #End ForEach
 } #End Function
 
 
