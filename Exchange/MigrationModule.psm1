@@ -199,9 +199,17 @@ function Move-O365User {
                 }
             }
 
-        # Do the move
+        #Do the move
         Write-Verbose "Moving $primarySMTP to O365"
-        New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
+        Try {
+            New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
+            While ((Get-MoveRequest -Identity $primarySMTP).Status -eq "InProgress" -or (Get-MoveRequest -Identity $primarySMTP).Status -eq "Queued") {Start-Sleep 15}
+            If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Failed" ) {throw "migration failed, see move request for more details"}
+            If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Suspended" ) {throw "the job has been suspended, see move request for more details"}
+            } 
+        Catch {
+            Write-Error $_.Exception.Message  -ErrorAction "Stop"
+            }
 
         #Update RetentionPolicy
         Write-Verbose "Applying RetentionPolicy to $primarySMTP"
