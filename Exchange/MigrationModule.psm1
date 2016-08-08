@@ -169,7 +169,7 @@ function Move-O365User {
             ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
             $currentUser = $currentUserCount[0]
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
-            $primarySMTP = $currentMailbox.primarysmtpaddress
+            [string]$primarySMTP = $currentMailbox.primarysmtpaddress
             }
         Catch {
             write-error "Cannot find either the user account or mailbox for $target" -ErrorAction "Stop"
