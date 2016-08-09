@@ -72,13 +72,15 @@ function Initialize-O365User
             ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
             $currentUser = $currentUserCount[0]
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
-            $newProxy = "smtp:" + $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
+            $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
             }
         Catch {
             write-error "Cannot find either the user account or mailbox for $UserName"
             continue
             }
-
+        
+        #Set changes to false
+        [bool]$isUpdated = $false
 
         #Check UPN to primary address
         IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
@@ -86,14 +88,19 @@ function Initialize-O365User
         }
         
         #Check for Proxy Address, add if missing
-        IF ($currentUser.proxyAddresses -notcontains $newProxy) {
-            Write-Verbose "Adding address $newProxy"
-            set-ADUser $UserName -add proxyAddresses = $newProxy
+        IF ($currentMailbox.emailAddresses -notcontains $newProxy) {
+            Try {
+                Write-Verbose "Adding address $newProxy"
+                set-mailbox $currentMailbox -Emailaddresses @{add = $newProxy}
+                $isUpdated = $true
+                }
+            Catch {
+                write-error "unable to add proxy address, user cannot be moved online!" -ErrorAction "Stop"
+                }
         }
 
         #Check each user to be a member of the groups
         $members=@()
-        [bool]$isUpdated = $false
         ForEach ($group in $groupList) {
             try {
                 $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty Name
@@ -109,7 +116,7 @@ function Initialize-O365User
 
         #If any changes were made, output warning
         If ($isUpdated) {
-            Write-Warning "groups have been updated, please allow replciation to complete before perfoming actual migration"
+            Write-Warning "groups and/or addresses have been updated for $target, please allow replciation to complete before perfoming actual migration"
             }
 
     } #End ForEach
