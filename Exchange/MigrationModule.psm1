@@ -13,11 +13,7 @@ function Initialize-O365User
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
-        [System.Management.Automation.PSCredential]$OnlineCredentials,
-
-        # LocalCredentials These are the credentials require to sign into your Exchange Environment
-        [Parameter(Mandatory=$true)]
-        [System.Management.Automation.PSCredential]$LocalCredentials
+        [System.Management.Automation.PSCredential]$OnlineCredentials
 
     )
 
@@ -62,7 +58,7 @@ function Initialize-O365User
         IF ($mSOLActive) {
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
-                Write-Verbose $importResults
+                #Write-Verbose $importResults
                 [bool]$mSOLActive = $false
                 }
             catch {
@@ -76,7 +72,7 @@ function Initialize-O365User
             ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
             $currentUser = $currentUserCount[0]
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
-            $newProxy = "smtp:"+$UserName+"@"+$onlineSMTP
+            $newProxy = "smtp:" + $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
             }
         Catch {
             write-error "Cannot find either the user account or mailbox for $UserName"
@@ -85,12 +81,11 @@ function Initialize-O365User
 
 
         #Check UPN to primary address
-        IF ($currentUser.UserPrincipalName -ne $currentMailbox.primarysmtpaddress) {
+        IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
             Write-Warning "the UPN and primary SMTP do not match.  Please correct"
         }
         
         #Check for Proxy Address, add if missing
-        
         IF ($currentUser.proxyAddresses -notcontains $newProxy) {
             Write-Verbose "Adding address $newProxy"
             set-ADUser $UserName -add proxyAddresses = $newProxy
