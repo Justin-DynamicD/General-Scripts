@@ -20,7 +20,6 @@ function Initialize-O365User
     #Variables specific to client
     $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal" #Ensures users are a membe of listed groups.  THese have been identified as used for assigning licenses
     $groupDomain = "corp.ad.viacom.com" #Domains that above groups are members of
-    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com","corp.ad.viacom.com" # testing, may be obsolete
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
 
@@ -29,7 +28,7 @@ function Initialize-O365User
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     
     #Import UserList into a workingList
-    If ($UserList) {$workingList = (import-csv $UserList -header UserName).UserName}
+    If ($UserList) {$workingList = Get-Content $UserList}
     Else {$workingList = $UserName}
 
     #Load AD modules
@@ -172,8 +171,7 @@ function Move-O365User {
     )
 
     #Variables specific to client
-    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com" 
-    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com" #which domains are scanned in the event of a samAccountName being entered
+    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
 
     #Validate parameter combinations are valid
@@ -181,7 +179,7 @@ function Move-O365User {
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     
     #Import UserList into a workingList
-    If ($UserList) {$workingList = (import-csv $UserList -header UserName).UserName}
+    If ($UserList) {$workingList = Get-Content $UserList}
     Else {$workingList = $UserName}
 
     #Load AD modules
@@ -211,7 +209,6 @@ function Move-O365User {
         IF ($mSOLActive) {
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
-                Write-Verbose $importResults
                 [bool]$mSOLActive = $false
                 }
             catch {
@@ -225,7 +222,6 @@ function Move-O365User {
             $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
-
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             [string]$primarySMTP = $currentMailbox.primarysmtpaddress
             }
@@ -236,12 +232,11 @@ function Move-O365User {
         #Grab current SendLimits and RetentionPolicy
         $retentionPolicy = $currentMailbox.RetentionPolicy.Name
         If ($currentMailbox.UseDatabaseQuotaDefaults) {
-            write-verbose "$UserName storage quotas are being pulled form the database, updating storage quotas"
-            $dB = get-mailbox $currentMailbox.database.name
+            write-verbose "$target storage quotas are being pulled form the database, updating storage quotas"
+            $dB = get-mailboxdatabase $currentMailbox.database.name
             IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
             IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
             IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
-
             set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
             }
 
@@ -266,7 +261,7 @@ function Move-O365User {
             If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Suspended" ) {throw "the job has been suspended, see move request for more details"}
             } 
         Catch {
-            Write-Error $_.Exception.Message  -ErrorAction "Stop"
+            Write-Error $_.Exception.Message  -ErrorAction "Stop" #review this one later, should contiue next on error
             }
 
         #Update RetentionPolicy
