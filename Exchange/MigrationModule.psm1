@@ -257,7 +257,7 @@ function Move-O365User {
         Try {
             New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
             For ($i = (Get-MoveRequestStatistics $primarySMTP).percentcomplete ; $i -lt 100 ; $i = (Get-MoveRequestStatistics $primarySMTP).percentcomplete) {
-                Write-Progress -Activity "Migrating $primarySMTP..." -PercentComplete $i -Status "please wait"
+                Write-Progress -Activity "Migrating $primarySMTP, $i% complete..." -PercentComplete $i -Status "please wait"
                 If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Failed" ) {throw "migration failed, see move request for more details"}
                 If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Suspended" ) {throw "the job has been suspended, see move request for more details"}
                 Start-Sleep -seconds 60
