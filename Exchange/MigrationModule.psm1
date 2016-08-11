@@ -40,7 +40,7 @@ function Initialize-O365User
 
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
-    $localSession = Get-PSSession | Where-Object {$_.ComputerName -ne "ps.outlook.com"}
+    $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
     If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
 
@@ -190,7 +190,7 @@ function Move-O365User {
 
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
-    $localSession = Get-PSSession | Where-Object {$_.ComputerName -ne "ps.outlook.com"}
+    $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
     If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
 
