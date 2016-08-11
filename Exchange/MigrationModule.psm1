@@ -20,7 +20,8 @@ function Initialize-O365User
     #Variables specific to client
     $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal" #Ensures users are a membe of listed groups.  THese have been identified as used for assigning licenses
     $groupDomain = "corp.ad.viacom.com" #Domains that above groups are members of
-    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com","corp.ad.viacom.com"
+    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com","corp.ad.viacom.com" # testing, may be obsolete
+    $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
 
     #Validate parameter combinations are valid
@@ -68,9 +69,10 @@ function Initialize-O365User
 
         #Get CurrentUser and needed SMTP values
         Try {
-            $currentUserCount = @()
-            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
-            $currentUser = $currentUserCount[0]
+            #$currentUserCount = @()
+            #ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
+            $currentUser = get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
+            IF ($currentuser.count -ne 1) {Throw "$traget did not return a unique value"}
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
             }
