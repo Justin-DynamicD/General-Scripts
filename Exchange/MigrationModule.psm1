@@ -70,7 +70,6 @@ function Initialize-O365User
         #Get CurrentUser and needed SMTP values
         Try {
             $currentUser = @()
-            #ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
             $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
@@ -98,7 +97,7 @@ function Initialize-O365User
                 $isUpdated = $true
                 }
             Catch {
-                write-error "unable to add proxy address, user cannot be moved online!" -ErrorAction "Stop"
+                write-error "unable to add proxy address, check to ensure proper permissions are present!" -ErrorAction "Stop"
                 }
         }
 
@@ -175,6 +174,7 @@ function Move-O365User {
     #Variables specific to client
     $targetDeliveryDomain = "viacom.mail.onmicrosoft.com" 
     $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com" #which domains are scanned in the event of a samAccountName being entered
+    $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
@@ -221,9 +221,11 @@ function Move-O365User {
 
         #Get CurrentUser and needed SMTP values
         Try {
-            $currentUserCount = @()
-            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
-            $currentUser = $currentUserCount[0]
+            $currentUser = @()
+            $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
+            IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
+            $currentUser = $currentUser[0]
+
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             [string]$primarySMTP = $currentMailbox.primarysmtpaddress
             }
