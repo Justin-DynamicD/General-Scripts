@@ -4,7 +4,7 @@ function Initialize-O365User
     Param
     (
         # UserName this is the name of the account you wish to prepare for migration
-        [Parameter(Mandatory=$true)] 
+        [Parameter(Mandatory=$false)] 
         [String]$UserName,
 
          # UserList this is a csv file containing usernames and domains for bulk migrations
@@ -19,7 +19,7 @@ function Initialize-O365User
 
     #Variables specific to client
     $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal" #Ensures users are a membe of listed groups.  THese have been identified as used for assigning licenses
-    $groupDomain = "corp.ad.viacom.com" #Domains that above groups are memebers of
+    $groupDomain = "corp.ad.viacom.com" #Domains that above groups are members of
     $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com","corp.ad.viacom.com"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
 
@@ -69,7 +69,7 @@ function Initialize-O365User
         #Get CurrentUser and needed SMTP values
         Try {
             $currentUserCount = @()
-            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
+            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
             $currentUser = $currentUserCount[0]
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
@@ -219,7 +219,7 @@ function Move-O365User {
         #Get CurrentUser and needed SMTP values
         Try {
             $currentUserCount = @()
-            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {name -eq $target} -ErrorAction "Stop"}
+            ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
             $currentUser = $currentUserCount[0]
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             [string]$primarySMTP = $currentMailbox.primarysmtpaddress
