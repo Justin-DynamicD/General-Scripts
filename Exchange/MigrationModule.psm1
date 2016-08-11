@@ -18,8 +18,8 @@ function Initialize-O365User
     )
 
     #Variables specific to client
-    $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal"
-    $groupDomain = "corp.ad.viacom.com"
+    $groupList = "Office 365 Enrollment", "Office 365 Enterprise Cal" #Ensures users are a membe of listed groups.  THese have been identified as used for assigning licenses
+    $groupDomain = "corp.ad.viacom.com" #Domains that above groups are memebers of
     $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com","corp.ad.viacom.com"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
 
@@ -170,8 +170,8 @@ function Move-O365User {
     )
 
     #Variables specific to client
-    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
-    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com"
+    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com" 
+    $searchDomains = "paramount.ad.viacom.com","mtvn.ad.viacom.com" #which domains are scanned in the event of a samAccountName being entered
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
