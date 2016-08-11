@@ -69,9 +69,9 @@ function Initialize-O365User
 
         #Get CurrentUser and needed SMTP values
         Try {
-            #$currentUserCount = @()
+            $currentUser = @()
             #ForEach ($domain in $searchDomains) {$currentUserCount += get-aduser -server $domain -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"}
-            $currentUser = get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
+            $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
             IF ($currentuser.count -ne 1) {Throw "$traget did not return a unique value"}
             $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
             $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
