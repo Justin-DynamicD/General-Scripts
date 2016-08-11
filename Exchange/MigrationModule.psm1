@@ -256,10 +256,13 @@ function Move-O365User {
         Write-Verbose "Moving $primarySMTP to O365"
         Try {
             New-MoveRequest -Identity $primarySMTP -Remote -RemoteHostName $RemoteHostName -RemoteCredential $LocalCredentials -TargetDeliveryDomain $targetDeliveryDomain -BadItemLimit 100 -AcceptLargeDataLoss
-            While ((Get-MoveRequest -Identity $primarySMTP).Status -eq "InProgress" -or (Get-MoveRequest -Identity $primarySMTP).Status -eq "Queued") {Start-Sleep 15}
-            If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Failed" ) {throw "migration failed, see move request for more details"}
-            If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Suspended" ) {throw "the job has been suspended, see move request for more details"}
-            } 
+            For ($i = (Get-MoveRequestStatistics $primarySMTP).percentcomplete ; $i -lt 100 ; $i = (Get-MoveRequestStatistics $primarySMTP).percentcomplete) {
+                Write-Progress -Activity "Migrating $primarySMTP..." -PercentComplete $i -Status "please wait"
+                If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Failed" ) {throw "migration failed, see move request for more details"}
+                If ((Get-MoveRequest -Identity $primarySMTP).Status -eq "Suspended" ) {throw "the job has been suspended, see move request for more details"}
+                Start-Sleep -seconds 60
+                } #End write-progress
+            } #End Try
         Catch {
             Write-Error $_.Exception.Message  -ErrorAction "Stop" #review this one later, should contiue next on error
             }
