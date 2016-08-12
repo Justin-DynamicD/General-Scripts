@@ -68,6 +68,18 @@ function Initialize-O365User
     # create an Empty settings log before check
     [System.Collections.ArrayList]$settingsOutLog = @()
 
+    #Set Current Session to Office365
+    Try {
+        $importResults = Import-PSSession $mSOLSession -AllowClobber
+        [bool]$mSOLActive = $true
+        }
+    catch {
+        write-error "can't switch context to MSOL session" -ErrorAction "Stop"
+        }
+    
+    #Gather list of accepted Domains for comparison
+    $mSOLAcceptedDomain = Get-AcceptedDomain | select -ExpandProperty DomainName 
+
     #Begin per-user Loop
     ForEach ($target in $workingList) {
 
@@ -135,12 +147,19 @@ function Initialize-O365User
                 } #End Match
             } #End ForEach
 
+        #Gather all smtp addresses and compare to online list
+        $addr = $currentMailbox.emailaddresses | Select -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
+        $addr = ($addr | foreach {($_.split("@",2))[1]})
+        [System.Collections.ArrayList]$missingDomainList = @()
+        Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item)}}
+
         #Need to create a custom object to add to the log
         $newentry = new-object PSObject
         $newentry | Add-Member -Type NoteProperty -Name MailboxName -Value $target
         $newentry | Add-Member -Type NoteProperty -Name UPNMatch -Value $uPNMatch
         $newentry | Add-Member -Type NoteProperty -Name ProxyAddressUpdate -Value $ProxyAddressUpdate
         $newentry | Add-Member -Type NoteProperty -Name groupsUpdated -Value $groupsUpdated
+        $newentry | Add-Member -Type NoteProperty -Name MissingDomains -Value [string]$missingDomainList
         $settingsOutLog.add($newentry) | Out-Null
 
         } #End ForEach
