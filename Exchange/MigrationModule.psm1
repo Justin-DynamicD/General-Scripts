@@ -161,6 +161,10 @@ function Move-O365User {
         [Parameter(Mandatory=$false)][ValidateSet("owa.viacom.com","owa.mtvne.com","mail.paramount.com")] 
         [string]$RemoteHostName = "owa.viacom.com",
 
+        # RemoteHostName These are valid endpoints for replicating to the cloud
+        [Parameter(Mandatory=$false)] 
+        [string]$SettingsOutFile = ".\MailboxSettings.csv",
+
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
         [System.Management.Automation.PSCredential]$OnlineCredentials,
@@ -180,7 +184,6 @@ function Move-O365User {
     
     #Import UserList into a workingList
     If ($UserList) {$workingList = Get-Content $UserList}
-    Else {$workingList = $UserName}
 
     #Load AD modules
     If (!(Get-module ActiveDirectory)) {
@@ -202,9 +205,92 @@ function Move-O365User {
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
     
-    #Begin per-user Loop
-    ForEach ($target in $workingList) {
+    #Begin MigrationBatch
+    If ($UserList) {
+        
+            #Set Current Session to Local Host
+            IF ($mSOLActive) {
+                Try {
+                    $importResults = Import-PSSession $localSession -AllowClobber
+                    [bool]$mSOLActive = $false
+                    }
+                catch {
+                    write-error "can't switch context to local session" -ErrorAction "Stop"
+                    }
+                }
 
+            #Set Per-User attributes on the mailbox
+            Foreach ($target in $workingList) {
+                Try {
+                    $currentUser = @()
+                    $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
+                    IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
+                    $currentUser = $currentUser[0]
+                    $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
+                    [string]$primarySMTP = $currentMailbox.primarysmtpaddress
+                    }
+                Catch {
+                    write-error "Cannot find either the user account or mailbox for $target" -ErrorAction "Stop"
+                    }
+
+                #Grab current SendLimits and RetentionPolicy
+                $retentionPolicy = $currentMailbox.RetentionPolicy.Name
+                [bool]$updatedMBQuota = $false
+                If ($currentMailbox.UseDatabaseQuotaDefaults) {
+                    write-verbose "$target storage quotas are being pulled form the database, updating storage quotas"
+                    $dB = get-mailboxdatabase $currentMailbox.database.name
+                    IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
+                    IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
+                    IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
+                    set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+                    [bool]$updatedMBQuota = $true
+                    }
+                
+                # export the RetentionPolicy to File
+                [System.Collections.ArrayList]$settingsOutLog = Import-Csv -path $SettingsOutFile
+                Write-Verbose "outputting $target settings and changes"
+
+                #Need to create a custom object to add to the arraylist
+                $newentry = new-object PSObject
+                $newentry | Add-Member -Type NoteProperty -Name MailboxName -Value $target
+                $newentry | Add-Member -Type NoteProperty -Name RetentionPolicy -Value $retentionPolicy
+                $newentry | Add-Member -Type NoteProperty -Name UpdatedMBQuota -Value $updatedMBQuota
+                $settingsOutLog.add($newentry) | Out-Null
+
+                #Save and append log
+                $settingsOutLog | export-csv -Path $SettingsOutFile -Force
+                } # End ForEach
+
+            #switch session to mSOL
+            IF (!$mSOLActive) {
+                Try {
+                    $importResults = Import-PSSession $mSOLSession -AllowClobber
+                    Write-Verbose $importResults
+                    [bool]$mSOLActive = $true
+                    }
+                catch {
+                    write-error "can't switch context to MSOL session" -ErrorAction "Stop"
+                    }
+                }
+
+            #Do the move
+            Write-Verbose "Begining batch migration to O365"
+            Try {
+                $migrationEndpointOnPrem = New-MigrationEndpoint -ExchangeRemoteMove -Name OnpremEndpoint -RemoteServer $RemoteHostName -Credentials $localCredentials
+                $OnboardingBatch = New-MigrationBatch -Name RemoteOnBoarding -SourceEndpoint $MigrationEndpointOnprem.Identity -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($UserList))
+                Start-MigrationBatch -Identity $OnboardingBatch.Identity
+                } #End Try
+            Catch {
+                Write-Error $_.Exception.Message  
+                Write-Error "MigrationBatch setup failed, review Batchname RemoteOnBoarding" -ErrorAction "Stop" 
+                }
+            $iD = $OnboardingBatch.Identity
+            Write-Information "Migration batch $iD has been started and policies saved to $SettingsOutFile"
+    } #End MigrationBatch
+
+    #Begin Individual User
+    Else {
+        $target = $UserName
         #Set Current Session to Local Host
         IF ($mSOLActive) {
             Try {
@@ -274,6 +360,6 @@ function Move-O365User {
         #Disable Clutter
         Write-Verbose "Disabling Clutter for $primarySMTP"
         Set-Clutter -Identity $primarySMTP -Enable $false
+    } #End Individual User
 
-    } #End per-user Loop
 } #End Function
