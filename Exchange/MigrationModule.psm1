@@ -169,8 +169,6 @@ function Move-O365User {
     General notes
     .COMPONENT
     The component this cmdlet belongs to
-    .ROLE
-    The role this cmdlet belongs to
     .FUNCTIONALITY
     The functionality that best describes this cmdlet
     #>
@@ -325,17 +323,30 @@ function Move-O365User {
             #Do the move
             Write-Verbose "Begining batch migration to O365"
             Try {
-                $remoteOnboarding = "RemoteOnBoarding "+ (get-date -format m)
-                $litteralFileName = [string](get-item $UserList)
-                $OnboardingBatch = New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($litteralFileName))
-                Start-MigrationBatch -Identity $OnboardingBatch.Identity
+
+                #Create new import file that matches format required by batchmigration
+                $rSet=$Null
+                $tmpFileName=$Null
+                $set = "abcdefghijklmnopqrstuvwxyz0123456789".ToCharArray()
+                for ($i=1; $i -le 6; $i++) {
+                    $rSet += $set | Get-Random
+                    }
+                $tmpFileName = $env:temp + "\" + $Rset + ".csv"
+                "emailaddress" | Out-File $tmpFileName -Force
+                $workingList | Out-File $tmpFileName -Append
+
+                #Name and start the batch
+                $remoteOnboarding = $shortName + " "+ (get-date -format m)
+                New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($tmpFileName)) -autostart
                 } #End Try
             Catch {
                 Write-Error $_.Exception.Message  
                 Write-Error "MigrationBatch setup failed, review Batchname RemoteOnBoarding" -ErrorAction "Stop" 
                 }
-            $iD = $OnboardingBatch.Identity
-            Write-Information "Migration batch $iD has been started and policies saved to $SettingsOutFile"
+
+            Write-Information "Migration batch $remoteOnboarding has been started and policies saved to $SettingsOutFile"
+            Remove-Item -Path $tmpFileName -force
+
     } #End MigrationBatch
 
     #Begin Individual User
