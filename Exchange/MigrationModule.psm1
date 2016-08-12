@@ -13,7 +13,7 @@ function Initialize-O365User
 
         # SettingsOutFile This specifies the filename to store check-result data into
         [Parameter(Mandatory=$false)] 
-        [string]$SettingsOutFile = ".\MailboxSettings "+ (get-date -format m) + ".csv",
+        [string]$SettingsOutFile,
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
@@ -30,6 +30,15 @@ function Initialize-O365User
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
+
+    #Generate Log filename
+    if ($UserList -and !$SettingsOutFile) {
+        $shortName = [io.path]::GetFileNameWithoutExtension($UserList)
+        $SettingsOutFile = $shortName + " " + (get-date -format m) + ".csv"
+        }
+    ElseIf ($UserName -and !$SettingsOutFile) {
+        $SettingsOutFile = $UserName + " " + (get-date -format m) + ".csv"
+        }
     
     #Import UserList into a workingList
     If ($UserList) {$workingList = Get-Content $UserList}
@@ -120,7 +129,7 @@ function Initialize-O365User
 
             If ($members -notcontains $currentUser.distinguishedname) {
                 Write-Verbose "adding $currentUser.Name to $group"
-                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.distinguishedname
+                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser
                 $groupsUpdated = $true
                 } #End Match
             } #End ForEach
@@ -199,6 +208,15 @@ function Move-O365User {
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     
+    #Generate Log filename
+    if ($UserList -and !$SettingsOutFile) {
+        $shortName = [io.path]::GetFileNameWithoutExtension($UserList)
+        $SettingsOutFile = $shortName + " " + (get-date -format m) + ".csv"
+        }
+    ElseIf ($UserName -and !$SettingsOutFile) {
+        $SettingsOutFile = $UserName + " " + (get-date -format m) + ".csv"
+        }
+
     #Import UserList into a workingList
     If ($UserList) {$workingList = Get-Content $UserList}
 
@@ -215,7 +233,7 @@ function Move-O365User {
         catch {write-error "Cannot import MSOnline module, please make sure it is available" -ErrorAction "Stop"}
         }
     #>
-    
+
     Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
 
     #Connect to the Exchange online environment and track all cmdlets
@@ -306,8 +324,7 @@ function Move-O365User {
             Write-Verbose "Begining batch migration to O365"
             Try {
                 $remoteOnboarding = "RemoteOnBoarding "+ (get-date -format m)
-                $migrationEndpointOnPrem = New-MigrationEndpoint -ExchangeRemoteMove -Name OnpremEndpoint -RemoteServer $RemoteHostName -Credentials $localCredentials
-                $OnboardingBatch = New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $MigrationEndpointOnprem.Identity -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($UserList))
+                $OnboardingBatch = New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($UserList))
                 Start-MigrationBatch -Identity $OnboardingBatch.Identity
                 } #End Try
             Catch {
