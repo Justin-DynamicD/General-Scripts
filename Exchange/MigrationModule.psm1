@@ -30,6 +30,7 @@ function Initialize-O365User
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
+    If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
 
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
@@ -207,6 +208,7 @@ function Move-O365User {
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
+    If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
     
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
@@ -324,7 +326,8 @@ function Move-O365User {
             Write-Verbose "Begining batch migration to O365"
             Try {
                 $remoteOnboarding = "RemoteOnBoarding "+ (get-date -format m)
-                $OnboardingBatch = New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($UserList))
+                $litteralFileName = [string](get-item $UserList)
+                $OnboardingBatch = New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($litteralFileName))
                 Start-MigrationBatch -Identity $OnboardingBatch.Identity
                 } #End Try
             Catch {
