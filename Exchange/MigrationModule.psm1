@@ -208,12 +208,14 @@ function Move-O365User {
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
 
+    <#
     #Load MSOnline modules
     If (!(Get-module MSOnline)) {
         Try {import-module MSOnline}
         catch {write-error "Cannot import MSOnline module, please make sure it is available" -ErrorAction "Stop"}
         }
-
+    #>
+    
     Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
 
     #Connect to the Exchange online environment and track all cmdlets
