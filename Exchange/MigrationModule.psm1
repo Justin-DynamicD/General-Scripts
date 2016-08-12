@@ -11,6 +11,10 @@ function Initialize-O365User
         [Parameter(Mandatory=$false)]
         [string]$UserList,
 
+        # SettingsOutFile This specifies the filename to store check-result data into
+        [Parameter(Mandatory=$false)] 
+        [string]$SettingsOutFile = ".\MailboxSettings "+ (get-date -format m) + ".csv",
+
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
         [System.Management.Automation.PSCredential]$OnlineCredentials
@@ -51,6 +55,9 @@ function Initialize-O365User
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
     
+    # create an Empty settings log before check
+    [System.Collections.ArrayList]$settingsOutLog = @()
+
     #Begin per-user Loop
     ForEach ($target in $workingList) {
 
@@ -77,15 +84,18 @@ function Initialize-O365User
             }
         Catch {
             write-error "Cannot find either the user account or mailbox for $UserName"
-            continue
+            return
             }
         
         #Set changes to false
-        [bool]$isUpdated = $false
+        [bool]$uPNMatch = $true
+        [string]$ProxyAddressUpdate = '[no update]'
+        [bool]$groupsUpdated = $false
 
         #Check UPN to primary address
         IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
             Write-Warning "the UPN and primary SMTP do not match.  Please correct"
+            [bool]$uPNMatch = $false
         }
         
         #Check for Proxy Address, add if missing
@@ -93,7 +103,7 @@ function Initialize-O365User
             Try {
                 Write-Verbose "Adding address $newProxy"
                 set-mailbox $currentMailbox -Emailaddresses @{add = $newProxy}
-                $isUpdated = $true
+                [string]$ProxyAddressUpdate = $newProxy
                 }
             Catch {
                 write-error "unable to add proxy address, check to ensure proper permissions are present!" -ErrorAction "Stop"
@@ -104,23 +114,30 @@ function Initialize-O365User
         $members=@()
         ForEach ($group in $groupList) {
             try {
-                $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty Name
+                $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty distinguishedname
                 }
             Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
 
-            If ($members -notcontains $currentUser.Name) {
+            If ($members -notcontains $currentUser.distinguishedname) {
                 Write-Verbose "adding $currentUser.Name to $group"
-                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.Name
-                $isUpdated = $true
+                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.distinguishedname
+                $groupsUpdated = $true
                 } #End Match
             } #End ForEach
 
-        #If any changes were made, output warning
-        If ($isUpdated) {
-            Write-Warning "groups and/or addresses have been updated for $target, please allow replciation to complete before perfoming actual migration"
-            }
+        #Need to create a custom object to add to the log
+        $newentry = new-object PSObject
+        $newentry | Add-Member -Type NoteProperty -Name MailboxName -Value $target
+        $newentry | Add-Member -Type NoteProperty -Name UPNMatch -Value $uPNMatch
+        $newentry | Add-Member -Type NoteProperty -Name ProxyAddressUpdate -Value $ProxyAddressUpdate
+        $newentry | Add-Member -Type NoteProperty -Name groupsUpdated -Value $groupsUpdated
+        $settingsOutLog.add($newentry) | Out-Null
 
-    } #End ForEach
+        } #End ForEach
+
+    #Save and append log
+    $settingsOutLog | export-csv -Path $SettingsOutFile -Force
+
 } #End Function
 
 
@@ -161,9 +178,9 @@ function Move-O365User {
         [Parameter(Mandatory=$false)][ValidateSet("owa.viacom.com","owa.mtvne.com","mail.paramount.com")] 
         [string]$RemoteHostName = "owa.viacom.com",
 
-        # RemoteHostName These are valid endpoints for replicating to the cloud
+        # SettingsOutFile This specifies the filename to store batchmigration data into
         [Parameter(Mandatory=$false)] 
-        [string]$SettingsOutFile = ".\MailboxSettings.csv",
+        [string]$SettingsOutFile = ".\MailboxSettings "+ (get-date -format m) + ".csv",
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
@@ -190,6 +207,13 @@ function Move-O365User {
         Try {import-module ActiveDirectory}
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
+
+    #Load MSOnline modules
+    If (!(Get-module MSOnline)) {
+        Try {import-module MSOnline}
+        catch {write-error "Cannot import MSOnline module, please make sure it is available" -ErrorAction "Stop"}
+        }
+
     Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
 
     #Connect to the Exchange online environment and track all cmdlets
@@ -219,6 +243,9 @@ function Move-O365User {
                     }
                 }
 
+            # Set an Empty settings file before move
+            [System.Collections.ArrayList]$settingsOutLog = @()
+
             #Set Per-User attributes on the mailbox
             Foreach ($target in $workingList) {
                 Try {
@@ -246,8 +273,7 @@ function Move-O365User {
                     [bool]$updatedMBQuota = $true
                     }
                 
-                # export the RetentionPolicy to File
-                [System.Collections.ArrayList]$settingsOutLog = Import-Csv -path $SettingsOutFile
+                
                 Write-Verbose "outputting $target settings and changes"
 
                 #Need to create a custom object to add to the arraylist
@@ -257,9 +283,10 @@ function Move-O365User {
                 $newentry | Add-Member -Type NoteProperty -Name UpdatedMBQuota -Value $updatedMBQuota
                 $settingsOutLog.add($newentry) | Out-Null
 
-                #Save and append log
-                $settingsOutLog | export-csv -Path $SettingsOutFile -Force
                 } # End ForEach
+
+            #Save and append log
+            $settingsOutLog | export-csv -Path $SettingsOutFile -Force
 
             #switch session to mSOL
             IF (!$mSOLActive) {
@@ -276,8 +303,9 @@ function Move-O365User {
             #Do the move
             Write-Verbose "Begining batch migration to O365"
             Try {
+                $remoteOnboarding = "RemoteOnBoarding "+ (get-date -format m)
                 $migrationEndpointOnPrem = New-MigrationEndpoint -ExchangeRemoteMove -Name OnpremEndpoint -RemoteServer $RemoteHostName -Credentials $localCredentials
-                $OnboardingBatch = New-MigrationBatch -Name RemoteOnBoarding -SourceEndpoint $MigrationEndpointOnprem.Identity -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($UserList))
+                $OnboardingBatch = New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $MigrationEndpointOnprem.Identity -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($UserList))
                 Start-MigrationBatch -Identity $OnboardingBatch.Identity
                 } #End Try
             Catch {
