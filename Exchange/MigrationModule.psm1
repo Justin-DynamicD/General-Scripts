@@ -80,9 +80,13 @@ function Initialize-O365User
     #Gather list of accepted Domains for comparison
     $mSOLAcceptedDomain = Get-AcceptedDomain | select -ExpandProperty DomainName 
 
-    #Begin per-user Loop
+    #Begin per-user Loop and track progress
+    [int]$totalCount = $workingList.count
+    [int]$currentCount = 0
     ForEach ($target in $workingList) {
-
+        $currentCount ++ | Out-Null
+        Write-Progress -Activity "Checking $target, $currentpercent% complete..." -PercentComplete (($currentCount / $totalCount)*100) -Status "analyzing..."
+        
         #Set Current Session to Local Host
         IF ($mSOLActive) {
             Try {
