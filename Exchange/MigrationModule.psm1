@@ -159,7 +159,7 @@ function Initialize-O365User
         $newentry | Add-Member -Type NoteProperty -Name UPNMatch -Value $uPNMatch
         $newentry | Add-Member -Type NoteProperty -Name ProxyAddressUpdate -Value $ProxyAddressUpdate
         $newentry | Add-Member -Type NoteProperty -Name groupsUpdated -Value $groupsUpdated
-        $newentry | Add-Member -Type NoteProperty -Name MissingDomains -Value [string]$missingDomainList
+        $newentry | Add-Member -Type NoteProperty -Name MissingDomains -Value $missingDomainList
         $settingsOutLog.add($newentry) | Out-Null
 
         } #End ForEach
