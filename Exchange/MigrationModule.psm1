@@ -151,7 +151,8 @@ function Initialize-O365User
         $addr = $currentMailbox.emailaddresses | Select -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
         $addr = ($addr | foreach {($_.split("@",2))[1]})
         [System.Collections.ArrayList]$missingDomainList = @()
-        Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item)}}
+        Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item) | Out-Null }}
+        [string]$missingDomainList = $missingDomainList -join "`r`n"
 
         #Need to create a custom object to add to the log
         $newentry = new-object PSObject
