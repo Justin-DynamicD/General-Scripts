@@ -306,14 +306,17 @@ function Move-O365User {
 
                 #Grab current SendLimits and RetentionPolicy
                 $retentionPolicy = $currentMailbox.RetentionPolicy.Name
-                [bool]$updatedMBQuota = $false
                 If ($currentMailbox.UseDatabaseQuotaDefaults) {
                     write-verbose "$target storage quotas are being pulled form the database, updating storage quotas"
                     $dB = get-mailboxdatabase $currentMailbox.database.name
-                    IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
-                    IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
-                    IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
-                    set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+                    IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {[string]$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
+                    IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {[string]$DBSendQuota = $dB.ProhibitSendQuota.Value}
+                    IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {[string]$DBWarning = $dB.IssueWarningQuota.Value}
+                    }
+                Else {
+                    IF ($currentMailbox.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {[string]$DBReceiveQuota = $currentMailbox.ProhibitSendReceiveQuota.Value}
+                    IF ($currentMailbox.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {[string]$DBSendQuota = $currentMailbox.ProhibitSendQuota.Value}
+                    IF ($currentMailbox.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {[string]$DBWarning = $currentMailbox.IssueWarningQuota.Value}
                     }
                 
                 
@@ -411,6 +414,11 @@ function Move-O365User {
             IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
             IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
             }
+        Else {
+            IF ($currentMailbox.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $currentMailbox.ProhibitSendReceiveQuota.Value}
+            IF ($currentMailbox.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $currentMailbox.ProhibitSendQuota.Value}
+            IF ($currentMailbox.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $currentMailbox.IssueWarningQuota.Value}
+            }
 
         #switch session to mSOL
         IF (!$mSOLActive) {
@@ -440,7 +448,7 @@ function Move-O365User {
             }
 
         #update Storage Policy
-        set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+        set-mailbox $currentUser.Name -UseDatabaseQuotaDefaults $false -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
 
         #Update RetentionPolicy
         Write-Verbose "Applying RetentionPolicy to $primarySMTP"
