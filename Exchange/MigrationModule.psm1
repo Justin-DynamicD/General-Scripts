@@ -314,7 +314,6 @@ function Move-O365User {
                     IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
                     IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
                     set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
-                    [bool]$updatedMBQuota = $true
                     }
                 
                 
@@ -324,7 +323,9 @@ function Move-O365User {
                 $newentry = new-object PSObject
                 $newentry | Add-Member -Type NoteProperty -Name MailboxName -Value $target
                 $newentry | Add-Member -Type NoteProperty -Name RetentionPolicy -Value $retentionPolicy
-                $newentry | Add-Member -Type NoteProperty -Name UpdatedMBQuota -Value $updatedMBQuota
+                $newentry | Add-Member -Type NoteProperty -Name DBReceiveQuota -Value $DBReceiveQuota
+                $newentry | Add-Member -Type NoteProperty -Name DBSendQuota -Value $DBSendQuota
+                $newentry | Add-Member -Type NoteProperty -Name DBWarning -Value $DBWarning
                 $settingsOutLog.add($newentry) | Out-Null
 
                 } # End ForEach
@@ -409,7 +410,6 @@ function Move-O365User {
             IF ($dB.ProhibitSendReceiveQuota.IsUnlimited) {$DBReceiveQuota = "Unlimited"} Else {$DBReceiveQuota = $dB.ProhibitSendReceiveQuota.Value}
             IF ($dB.ProhibitSendQuota.IsUnlimited) {$DBSendQuota = "Unlimited"} Else {$DBSendQuota = $dB.ProhibitSendQuota.Value}
             IF ($dB.IssueWarningQuota.IsUnlimited) {$DBWarning = "Unlimited"} Else {$DBWarning = $dB.IssueWarningQuota.Value}
-            set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
             }
 
         #switch session to mSOL
@@ -438,6 +438,9 @@ function Move-O365User {
         Catch {
             Write-Error $_.Exception.Message  -ErrorAction "Stop" #review this one later, should contiue next on error
             }
+
+        #update Storage Policy
+        set-mailbox $currentUser.Name -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
 
         #Update RetentionPolicy
         Write-Verbose "Applying RetentionPolicy to $primarySMTP"
