@@ -111,8 +111,8 @@ function Initialize-O365User
             $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
             }
         Catch {
-            write-error "Cannot find either the user account or mailbox for $target" -ErrorAction "SilentlyContinue"
             [bool]$userExist = $false
+            write-error "Cannot find either the user account or mailbox for $target" -ErrorAction "SilentlyContinue"
             }
         
         #Set changes to false
@@ -127,7 +127,7 @@ function Initialize-O365User
             IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
                 Write-Warning "the UPN and primary SMTP do not match.  Please correct"
                 [bool]$uPNMatch = $false
-            }
+                }
             
             #Check for Proxy Address, add if missing
             IF ($currentMailbox.emailAddresses -notcontains $newProxy) {
@@ -139,7 +139,7 @@ function Initialize-O365User
                 Catch {
                     write-error "unable to add proxy address, check to ensure proper permissions are present!" -ErrorAction "Stop"
                     }
-            }
+                }
 
             #Check each user to be a member of the groups
             $members=@()
@@ -166,10 +166,10 @@ function Initialize-O365User
             } # End If userExist
         
         Else {
-            $uPNMatch = '[not found]'
-            $ProxyAddressUpdate = '[not found]'
-            $groupsUpdated = '[not found]'
-            $missingDomainList = '[not found]'
+            $uPNMatch = $false
+            $ProxyAddressUpdate = '[user not found]'
+            $groupsUpdated = $false
+            $missingDomainList = '[user not found]'
             }
 
         #Need to create a custom object to add to the log
