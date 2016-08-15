@@ -50,7 +50,10 @@ function Initialize-O365User
         Try {import-module ActiveDirectory}
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
-    Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+    
+    If (!(Get-AdServerSettings).ViewEntireForest) {
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+        }
 
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
@@ -226,7 +229,7 @@ function Move-O365User {
 
         # SettingsOutFile This specifies the filename to store batchmigration data into
         [Parameter(Mandatory=$false)] 
-        [string]$SettingsOutFile = ".\MailboxSettings "+ (get-date -format m) + ".csv",
+        [string]$SettingsOutFile,
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
@@ -264,15 +267,9 @@ function Move-O365User {
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
 
-    <#
-    #Load MSOnline modules
-    If (!(Get-module MSOnline)) {
-        Try {import-module MSOnline}
-        catch {write-error "Cannot import MSOnline module, please make sure it is available" -ErrorAction "Stop"}
+    If (!(Get-AdServerSettings).ViewEntireForest) {
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
         }
-    #>
-
-    Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
 
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
@@ -472,5 +469,106 @@ function Move-O365User {
         Write-Verbose "Disabling Clutter for $primarySMTP"
         Set-Clutter -Identity $primarySMTP -Enable $false
     } #End Individual User
+
+} #End Function
+
+function Complete-O365User {
+    <#
+    .Synopsis
+    Short description
+    .DESCRIPTION
+    Long description
+    .EXAMPLE
+    Example of how to use this cmdlet
+    .EXAMPLE
+    Another example of how to use this cmdlet
+    .INPUTS
+    Inputs to this cmdlet (if any)
+    .OUTPUTS
+    Output from this cmdlet (if any)
+    .NOTES
+    General notes
+    .COMPONENT
+    The component this cmdlet belongs to
+    .FUNCTIONALITY
+    The functionality that best describes this cmdlet
+    #>
+
+    param (
+        # This is the Migration batch you wish to complete
+        [Parameter(Mandatory=$false)] 
+        [string]$MigrationBatch,
+
+        # SettingsOutFile This specifies the filename to store batchmigration data into
+        [Parameter(Mandatory=$true)] 
+        [string]$SettingsOutFile,
+
+        # OnlineCredentials These are the credentials require to sign into your O365 tenant
+        [Parameter(Mandatory=$true)]
+        [System.Management.Automation.PSCredential]$OnlineCredentials
+    )
+
+    #Variables specific to client
+    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
+    $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
+
+    #Validate parameter combinations are valid
+    If (!(Test-Path $SettingsOutFile)) {write-error "Cannot find $SettingsOutFile" -ErrorAction "Stop"}
+    
+
+    #Generate Migration Batch name if not provided
+    if (!$MigrationBatch) {
+        $shortName = [io.path]::GetFileNameWithoutExtension($SettingsOutFile)
+        $MigrationBatch = ($shortName.split(" ",2))[0]
+        }
+
+    #Import UserList into a workingList
+    $workingList = import-csv $SettingsOutFile
+
+    If (!(Get-AdServerSettings).ViewEntireForest) {
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+        }
+
+    #Connect to the Exchange online environment and track all cmdlets
+    [bool]$mSOLActive = $false
+    $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
+    $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
+    If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
+
+    If (!$mSOLActive) {
+        Try {
+            $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
+            Import-PSSession $mSOLSession -AllowClobber
+            [bool]$mSOLActive = $false
+            } #End Try
+        Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
+        }
+
+    #Look for MigrationBatch and Complete Migration
+    $currentBatch = Get-MigrationBatch $MigrationBatch
+    If ($currentBatch -eq $NULL) {
+        write-error "cannot find Migration Batch $MigrationBatch, please verify it exists or use -MigrationBatch flag" -ErrorAction "Stop"
+        }
+    Else {
+        Complete-MigrationBatch -Identity $currentBatch.Identity
+        while ((Get-MigrationBatch $currentBatch).Status -ne "Complete") {Start-Sleep -seconds 60}
+        }
+
+    #begin user processing to reapply settings
+    foreach ($currentUser in $workingList) {
+        
+        #update Storage Policy
+        Write-Verbose "Applying StorageQuotas to " + $currentUser.MailboxName
+        set-mailbox $currentUser.MailboxName -UseDatabaseQuotaDefaults $false -ProhibitSendQuota $currentUser.DBSendQuota -ProhibitSendReceiveQuota $currentUser.DBReceiveQuota -IssueWarningQuota $currentUser.DBWarning
+
+        #Update RetentionPolicy
+        Write-Verbose "Applying RetentionPolicy to " + $currentUser.MailboxName
+        Set-mailbox -Identity $currentUser.MailboxName -RetentionPolicy $currentUser.retentionPolicy
+
+        #Disable Clutter
+        Write-Verbose "Disabling Clutter for " + $currentUser.MailboxName
+        Set-Clutter -Identity $currentUser.MailboxName -Enable $false
+
+        } #End ForEach
 
 } #End Function
