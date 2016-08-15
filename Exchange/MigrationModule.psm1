@@ -83,9 +83,10 @@ function Initialize-O365User
     #Begin per-user Loop and track progress
     [int]$totalCount = $workingList.count
     [int]$currentCount = 0
+    [int]$currentPercent  = ($currentCount / $totalCount)*100
     ForEach ($target in $workingList) {
         $currentCount ++ | Out-Null
-        Write-Progress -Activity "Checking $target, $currentpercent% complete..." -PercentComplete (($currentCount / $totalCount)*100) -Status "analyzing..."
+        Write-Progress -Activity "Checking $target" -PercentComplete (($currentCount / $totalCount)*100) -Status "analyzing..."
         
         #Set Current Session to Local Host
         IF ($mSOLActive) {
