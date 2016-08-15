@@ -85,6 +85,7 @@ function Initialize-O365User
     [int]$currentCount = 0
     [int]$currentPercent  = ($currentCount / $totalCount)*100
     ForEach ($target in $workingList) {
+        [bool]$userExist = $true
         $currentCount ++ | Out-Null
         Write-Progress -Activity "Checking $target" -PercentComplete (($currentCount / $totalCount)*100) -Status "analyzing..."
         
@@ -110,8 +111,8 @@ function Initialize-O365User
             $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
             }
         Catch {
-            write-error "Cannot find either the user account or mailbox for $UserName"
-            return
+            write-error "Cannot find either the user account or mailbox for $target" -ErrorAction "SilentlyContinue"
+            [bool]$userExist = $false
             }
         
         #Set changes to false
@@ -119,45 +120,57 @@ function Initialize-O365User
         [string]$ProxyAddressUpdate = '[no update]'
         [bool]$groupsUpdated = $false
 
-        #Check UPN to primary address
-        IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
-            Write-Warning "the UPN and primary SMTP do not match.  Please correct"
-            [bool]$uPNMatch = $false
-        }
+        #UserExist Check
+        If ($userExist) {
+
+            #Check UPN to primary address
+            IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
+                Write-Warning "the UPN and primary SMTP do not match.  Please correct"
+                [bool]$uPNMatch = $false
+            }
+            
+            #Check for Proxy Address, add if missing
+            IF ($currentMailbox.emailAddresses -notcontains $newProxy) {
+                Try {
+                    Write-Verbose "Adding address $newProxy"
+                    set-mailbox $currentMailbox -Emailaddresses @{add = $newProxy}
+                    [string]$ProxyAddressUpdate = $newProxy
+                    }
+                Catch {
+                    write-error "unable to add proxy address, check to ensure proper permissions are present!" -ErrorAction "Stop"
+                    }
+            }
+
+            #Check each user to be a member of the groups
+            $members=@()
+            ForEach ($group in $groupList) {
+                try {
+                    $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty distinguishedname
+                    }
+                Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
+
+                If ($members -notcontains $currentUser.distinguishedname) {
+                    Write-Verbose "adding $currentUser.Name to $group"
+                    Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser
+                    $groupsUpdated = $true
+                    } #End Match
+                } #End ForEach
+
+            #Gather all smtp addresses and compare to online list
+            $addr = $currentMailbox.emailaddresses | Select -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
+            $addr = ($addr | foreach {($_.split("@",2))[1]})
+            [System.Collections.ArrayList]$missingDomainList = @()
+            Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item) | Out-Null }}
+            [string]$missingDomainList = $missingDomainList -join "`r`n"
+            
+            } # End If userExist
         
-        #Check for Proxy Address, add if missing
-        IF ($currentMailbox.emailAddresses -notcontains $newProxy) {
-            Try {
-                Write-Verbose "Adding address $newProxy"
-                set-mailbox $currentMailbox -Emailaddresses @{add = $newProxy}
-                [string]$ProxyAddressUpdate = $newProxy
-                }
-            Catch {
-                write-error "unable to add proxy address, check to ensure proper permissions are present!" -ErrorAction "Stop"
-                }
-        }
-
-        #Check each user to be a member of the groups
-        $members=@()
-        ForEach ($group in $groupList) {
-            try {
-                $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty distinguishedname
-                }
-            Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
-
-            If ($members -notcontains $currentUser.distinguishedname) {
-                Write-Verbose "adding $currentUser.Name to $group"
-                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser
-                $groupsUpdated = $true
-                } #End Match
-            } #End ForEach
-
-        #Gather all smtp addresses and compare to online list
-        $addr = $currentMailbox.emailaddresses | Select -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
-        $addr = ($addr | foreach {($_.split("@",2))[1]})
-        [System.Collections.ArrayList]$missingDomainList = @()
-        Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item) | Out-Null }}
-        [string]$missingDomainList = $missingDomainList -join "`r`n"
+        Else {
+            $uPNMatch = '[not found]'
+            $ProxyAddressUpdate = '[not found]'
+            $groupsUpdated = '[not found]'
+            $missingDomainList = '[not found]'
+            }
 
         #Need to create a custom object to add to the log
         $newentry = new-object PSObject
