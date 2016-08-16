@@ -110,8 +110,7 @@ function Initialize-O365User
             $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
-            $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
-            $newProxy = $currentMailbox.primarysmtpaddress.local + "@"+$onlineSMTP
+            $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
             }
         Catch {
             [bool]$userExist = $false
@@ -133,8 +132,15 @@ function Initialize-O365User
                 }
             
             #Check for Proxy Address, add if missing
-            IF ($currentMailbox.emailAddresses -notcontains $newProxy) {
+            $existingSMTPcheck = $currentMailbox.emailAddresses | where {($_.PrefixString -eq "smtp") -and ($_.AddressString -like "*@$onlineSMTP")}
+            IF ($existingSMTPcheck -eq $NULL) {
                 Try {
+                    $newProxy = $currentMailbox.primarysmtpaddress.local +"@"+$onlineSMTP
+                    If ((get-mailbox $newProxy) -ne $null) {
+                        For ($i=0,((get-mailbox $newProxy) -ne $null),$i++) {
+                            $newProxy = $currentMailbox.primarysmtpaddress.local + $i +"@"+$onlineSMTP
+                            } #End numeric incriment
+                        } #found a non-existant address!
                     Write-Verbose "Adding address $newProxy"
                     set-mailbox $currentMailbox -Emailaddresses @{add = $newProxy}
                     [string]$ProxyAddressUpdate = $newProxy
@@ -377,7 +383,7 @@ function Move-O365User {
                 #Name and start the batch
                 $shortName = [io.path]::GetFileNameWithoutExtension($UserList)
                 $remoteOnboarding = $shortName + " " + (get-date -format m)
-                New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($tmpFileName)) -autostart
+                New-MigrationBatch -Name $remoteOnboarding -SourceEndpoint $RemoteHostName -TargetDeliveryDomain $targetDeliveryDomain -CSVData ([System.IO.File]::ReadAllBytes($tmpFileName)) -baditemlimit 100 -autostart
                 } #End Try
             Catch {
                 Write-Error $_.Exception.Message  
@@ -550,9 +556,9 @@ function Complete-O365User {
         write-error "cannot find Migration Batch $MigrationBatch, please verify it exists or use -MigrationBatch flag" -ErrorAction "Stop"
         }
     Else {
-        If ($currentBatch.Status -eq "Synced") {
-            Complete-MigrationBatch -Identity $currentBatch.Identity
-            while ((Get-MigrationBatch $currentBatch).Status -ne "Complete") {Start-Sleep -seconds 60}
+        If ($currentBatch.Status.value -eq "Synced") {
+            Complete-MigrationBatch -Identity $currentBatch.Identity -force
+            while ((Get-MigrationBatch $currentBatch).Status.value -ne "Complete") {Start-Sleep -seconds 60}
             }
         }
 
@@ -561,10 +567,11 @@ function Complete-O365User {
     [int]$currentCount = 0
     foreach ($currentUser in $workingList) {
         $currentCount ++ | Out-Null
+        $tempName = $currentUser.MailboxName
         Write-Progress -Activity "Checking $currentUser" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
         
         #update Storage Policy
-        Write-Verbose "Applying StorageQuotas to " + $currentUser.MailboxName
+        Write-Verbose "Applying StorageQuotas to $($currentUser.MailboxName)"
         $DBSendQuota = ($currentUser.DBSendQuota).split(" ",3)[0] + ($currentUser.DBSendQuota).split(" ",3)[1]
         $DBReceiveQuota = ($currentUser.DBReceiveQuota).split(" ",3)[0] + ($currentUser.DBReceiveQuota).split(" ",3)[1]
         $DBWarning = ($currentUser.DBWarning).split(" ",3)[0] + ($currentUser.DBWarning).split(" ",3)[1]
@@ -572,11 +579,11 @@ function Complete-O365User {
         set-mailbox $currentUser.MailboxName -UseDatabaseQuotaDefaults $false -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
 
         #Update RetentionPolicy
-        Write-Verbose "Applying RetentionPolicy to " + $currentUser.MailboxName
+        Write-Verbose "Applying RetentionPolicy to $($currentUser.MailboxName)"
         Set-mailbox -Identity $currentUser.MailboxName -RetentionPolicy $currentUser.retentionPolicy
 
         #Disable Clutter
-        Write-Verbose "Disabling Clutter for " + $currentUser.MailboxName
+        Write-Verbose "Disabling Clutter for $($currentUser.MailboxName)"
         Set-Clutter -Identity $currentUser.MailboxName -Enable $false
 
         } #End ForEach
