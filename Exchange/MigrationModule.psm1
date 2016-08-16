@@ -550,8 +550,10 @@ function Complete-O365User {
         write-error "cannot find Migration Batch $MigrationBatch, please verify it exists or use -MigrationBatch flag" -ErrorAction "Stop"
         }
     Else {
-        Complete-MigrationBatch -Identity $currentBatch.Identity
-        while ((Get-MigrationBatch $currentBatch).Status -ne "Complete") {Start-Sleep -seconds 60}
+        If ($currentBatch.Status -eq "Synced") {
+            Complete-MigrationBatch -Identity $currentBatch.Identity
+            while ((Get-MigrationBatch $currentBatch).Status -ne "Complete") {Start-Sleep -seconds 60}
+            }
         }
 
     #begin user processing to reapply settings
