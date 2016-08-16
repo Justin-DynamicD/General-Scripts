@@ -555,11 +555,19 @@ function Complete-O365User {
         }
 
     #begin user processing to reapply settings
+    [int]$totalCount = $workingList.count
+    [int]$currentCount = 0
     foreach ($currentUser in $workingList) {
+        $currentCount ++ | Out-Null
+        Write-Progress -Activity "Checking $currentUser" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
         
         #update Storage Policy
         Write-Verbose "Applying StorageQuotas to " + $currentUser.MailboxName
-        set-mailbox $currentUser.MailboxName -UseDatabaseQuotaDefaults $false -ProhibitSendQuota $currentUser.DBSendQuota -ProhibitSendReceiveQuota $currentUser.DBReceiveQuota -IssueWarningQuota $currentUser.DBWarning
+        $DBSendQuota = ($currentUser.DBSendQuota).split(" ",3)[0] + ($currentUser.DBSendQuota).split(" ",3)[1]
+        $DBReceiveQuota = ($currentUser.DBReceiveQuota).split(" ",3)[0] + ($currentUser.DBReceiveQuota).split(" ",3)[1]
+        $DBWarning = ($currentUser.DBWarning).split(" ",3)[0] + ($currentUser.DBWarning).split(" ",3)[1]
+
+        set-mailbox $currentUser.MailboxName -UseDatabaseQuotaDefaults $false -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
 
         #Update RetentionPolicy
         Write-Verbose "Applying RetentionPolicy to " + $currentUser.MailboxName
