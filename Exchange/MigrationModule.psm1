@@ -314,7 +314,7 @@ function Move-O365User {
                     $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
                     IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
                     $currentUser = $currentUser[0]
-                    $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
+                    $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
                     [string]$primarySMTP = $currentMailbox.primarysmtpaddress
                     }
                 Catch {
@@ -415,7 +415,7 @@ function Move-O365User {
             $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
-            $currentMailbox = get-mailbox $currentUser.Name -ErrorAction "Stop"
+            $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
             [string]$primarySMTP = $currentMailbox.primarysmtpaddress
             }
         Catch {
@@ -556,9 +556,9 @@ function Complete-O365User {
         write-error "cannot find Migration Batch $MigrationBatch, please verify it exists or use -MigrationBatch flag" -ErrorAction "Stop"
         }
     Else {
-        If ($currentBatch.Status.value -eq "Synced") {
+        If ($currentBatch.Status.value -like "Synced*") {
             Complete-MigrationBatch -Identity $currentBatch.Identity -force
-            while ((Get-MigrationBatch $currentBatch).Status.value -ne "Complete") {Start-Sleep -seconds 60}
+            while ((Get-MigrationBatch $currentBatch).Status.value -ne "Completed") {Start-Sleep -seconds 60}
             }
         }
 
