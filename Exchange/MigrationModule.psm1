@@ -198,7 +198,8 @@ function Initialize-O365User
 } #End Function
 
 
-function Move-O365User {
+function Move-O365User 
+{
     <#
     .Synopsis
     Short description
@@ -478,7 +479,8 @@ function Move-O365User {
 
 } #End Function
 
-function Complete-O365User {
+function Complete-O365User 
+{
     <#
     .Synopsis
     Short description
@@ -588,3 +590,73 @@ function Complete-O365User {
         } #End ForEach
 
 } #End Function
+
+function New-ManagedFolder
+{
+    Param(
+        [Parameter(Mandatory=$True)]
+            [string]$TargetMailbox,
+        [Parameter(Mandatory=$True)]
+            [string]$FolderName,
+        [Parameter(Mandatory=$True)]
+            [string]$RetentionTag,
+        [Parameter(Mandatory=$False)]
+            [string]$AutoD = $True,
+        [Parameter(Mandatory=$False)]
+            [string]$EwsUri = "https://mail.office365.com/ews/exchange.asmx",
+        [Parameter(Mandatory=$False)]
+            [string]$ApiPath = "C:\Program Files\Microsoft\Exchange\Web Services\2.2\Microsoft.Exchange.WebServices.dll",
+        [Parameter(Mandatory=$False)]
+            [string]$Version = "Exchange2013_SP1"
+    )
+
+    $ImpersonationCreds = Get-Credential -Message "Enter Credentials for Account with Impersonation Role..."
+
+    Add-Type -Path $ApiPath
+
+    $ExchangeVersion = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::$Version
+    $Service = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService($ExchangeVersion)
+
+    $Creds = New-Object System.Net.NetworkCredential($ImpersonationCreds.UserName, $ImpersonationCreds.Password)   
+    $Service.Credentials = $Creds
+
+    if ($AutoD -eq $True) {
+        $Service.AutodiscoverUrl($TargetMailbox,{$True})  
+        "EWS URI = " + $Service.url
+    }
+    else {
+        $Uri=[system.URI] $EwsUri
+        $Service.Url = $uri
+    }
+
+    $Service.ImpersonatedUserId = New-Object Microsoft.Exchange.WebServices.Data.ImpersonatedUserId([Microsoft.Exchange.WebServices.Data.ConnectingIdType]::SmtpAddress, $TargetMailbox)
+
+    $Folder = New-Object Microsoft.Exchange.WebServices.Data.Folder($Service)  
+    $Folder.DisplayName = $FolderName
+    $Folder.FolderClass = "IPF.Note"
+
+    $FolderId= New-Object Microsoft.Exchange.WebServices.Data.FolderId([Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::MsgFolderRoot,$TargetMailbox)   
+    $EWSParentFolder = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($Service,$FolderId)
+
+    $FolderView = New-Object Microsoft.Exchange.WebServices.Data.FolderView(1)  
+    $SearchFilter = New-Object Microsoft.Exchange.WebServices.Data.SearchFilter+IsEqualTo([Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName,$FolderName)  
+    $FindFolderResults = $Service.FindFolders($EWSParentFolder.Id,$SearchFilter,$FolderView)
+
+    if ($FindFolderResults.TotalCount -eq 0) {  
+
+        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where {$_.DisplayName -eq $RetentionTag})
+
+        $Folder.PolicyTag = New-Object Microsoft.Exchange.WebServices.Data.PolicyTag($true,$Tag.RetentionId)
+        $Folder.Save($EWSParentFolder.Id)
+    }  
+    elseif ($FindFolderResults.TotalCount -eq 1) {  
+        Write-Verbose ("The folder '$FolderName' already exists in mailbox '$TargetMailbox'")
+        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where {$_.DisplayName -eq $RetentionTag})
+        $Folder = $FindFolderResults[0]
+        $Folder.PolicyTag = New-Object Microsoft.Exchange.WebServices.Data.PolicyTag($true,$Tag.RetentionId)
+        $Folder.Save($EWSParentFolder.Id)
+    }
+    else {
+        Write-Verbose "found multiple instances of the desired folder"
+    }
+}
