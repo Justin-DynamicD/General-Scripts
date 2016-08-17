@@ -567,7 +567,6 @@ function Complete-O365User {
     [int]$currentCount = 0
     foreach ($currentUser in $workingList) {
         $currentCount ++ | Out-Null
-        $tempName = $currentUser.MailboxName
         Write-Progress -Activity "Checking $currentUser" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
         
         #update Storage Policy
