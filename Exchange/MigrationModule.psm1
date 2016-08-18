@@ -58,7 +58,8 @@ function Initialize-O365User
             Connect-MsolService -Credential $OnlineCredentials
             }
         catch {write-error "Cannot connect to MSOnline, please make sure the serive and modules are available" -ErrorAction "Stop"}
-        
+        }
+
     If (!(Get-AdServerSettings).ViewEntireForest) {
         Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
         }
@@ -175,7 +176,8 @@ function Initialize-O365User
                     write-verbose "error adding licenses to user $target"
                     [string]$mSOLLicenseUpdate = 'needed'
                     }
-
+                }
+                
             #Check each user to be a member of the groups
             $members=@()
             ForEach ($group in $groupList) {
