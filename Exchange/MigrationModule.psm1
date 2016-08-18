@@ -26,11 +26,13 @@ function Initialize-O365User
     $groupDomain = "corp.ad.viacom.com" #Domains that above groups are members of
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
+    $exchangeModules = "E:\Program Files\Microsoft\Exchange Server\V14\bin\RemoteExchange.ps1" #location of the Exchange cmdlets on local server
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed"}
 
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
@@ -45,29 +47,42 @@ function Initialize-O365User
     If ($UserList) {$workingList = Get-Content $UserList}
     Else {$workingList = $UserName}
 
-    #Load AD modules
+    #Load AD/MSOnline modules
     If (!(Get-module ActiveDirectory)) {
         Try {import-module ActiveDirectory}
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
-        }
-    
+        }    
+    If (!(Get-module MSOnline)) {
+        Try {
+            import-module MSOnline
+            Connect-MsolService -Credential $OnlineCredentials
+            }
+        catch {write-error "Cannot connect to MSOnline, please make sure the serive and modules are available" -ErrorAction "Stop"}
+        
     If (!(Get-AdServerSettings).ViewEntireForest) {
         Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
         }
 
-    #Connect to the Exchange online environment and track all cmdlets
+    #Connect to the Exchange environments and track all cmdlets
     [bool]$mSOLActive = $false
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
-    If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
 
-    If (!$mSOLActive) {
+    If (!localSession) {
+        Try {
+            . $exchangeModules
+            Connect-ExchangeServer -Auto
+            $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
+            } #End Try
+        Catch {write-error "Cannot connect to INternal Exchange!" -ErrorAction "Stop"}
+        }
+    If (!$mSOLSession) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
             } #End Try
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
-    
+
     # create an Empty settings log before check
     [System.Collections.ArrayList]$settingsOutLog = @()
 
@@ -81,7 +96,7 @@ function Initialize-O365User
         }
     
     #Gather list of accepted Domains for comparison
-    $mSOLAcceptedDomain = Get-AcceptedDomain | select -ExpandProperty DomainName 
+    $mSOLAcceptedDomain = Get-AcceptedDomain | select -ExpandProperty DomainName
 
     #Begin per-user Loop and track progress
     [int]$totalCount = $workingList.count
@@ -96,7 +111,6 @@ function Initialize-O365User
         IF ($mSOLActive) {
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
-                #Write-Verbose $importResults
                 [bool]$mSOLActive = $false
                 }
             catch {
@@ -121,6 +135,7 @@ function Initialize-O365User
         [bool]$uPNMatch = $true
         [string]$ProxyAddressUpdate = '[no update]'
         [bool]$groupsUpdated = $false
+        [string]$mSOLLicenseUpdate = ''
 
         #UserExist Check
         If ($userExist) {
@@ -149,6 +164,17 @@ function Initialize-O365User
                     write-error "unable to add proxy address, check to ensure proper permissions are present!" -ErrorAction "Stop"
                     }
                 }
+            
+            #Check for MSOline licenses
+            If (!(Get-MsolUser -UserPrincipalName $target).isLicensed) {
+                Try {
+                    Set-MsolUserLicense -UserPrincipalName $target -AddLicenses viacom:ENTERPRISEPACK
+                    [string]$mSOLLicenseUpdate = 'added'
+                    }
+                Catch {
+                    write-verbose "error adding licenses to user $target"
+                    [string]$mSOLLicenseUpdate = 'needed'
+                    }
 
             #Check each user to be a member of the groups
             $members=@()
@@ -179,6 +205,7 @@ function Initialize-O365User
             $ProxyAddressUpdate = '[user not found]'
             $groupsUpdated = $false
             $missingDomainList = '[user not found]'
+            $mSOLLicenseUpdate = '[user not found]'
             }
 
         #Need to create a custom object to add to the log
@@ -187,6 +214,7 @@ function Initialize-O365User
         $newentry | Add-Member -Type NoteProperty -Name UPNMatch -Value $uPNMatch
         $newentry | Add-Member -Type NoteProperty -Name ProxyAddressUpdate -Value $ProxyAddressUpdate
         $newentry | Add-Member -Type NoteProperty -Name groupsUpdated -Value $groupsUpdated
+        $newentry | Add-Member -Type NoteProperty -Name mSOLLicenseUpdate -Value $mSOLLicenseUpdate
         $newentry | Add-Member -Type NoteProperty -Name MissingDomains -Value $missingDomainList
         $settingsOutLog.add($newentry) | Out-Null
 
@@ -255,6 +283,7 @@ function Move-O365User
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed"}
     
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
