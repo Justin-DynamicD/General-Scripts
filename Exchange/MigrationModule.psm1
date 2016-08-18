@@ -126,6 +126,7 @@ function Initialize-O365User
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
             $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
+            IF ($currentMailbox -eq $NULL) {Throw "$target mailbox could not be found locally"}
             }
         Catch {
             [bool]$userExist = $false
