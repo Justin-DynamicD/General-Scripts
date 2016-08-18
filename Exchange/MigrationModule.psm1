@@ -60,10 +60,6 @@ function Initialize-O365User
         catch {write-error "Cannot connect to MSOnline, please make sure the serive and modules are available" -ErrorAction "Stop"}
         }
 
-    If (!(Get-AdServerSettings).ViewEntireForest) {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        }
-
     #Connect to the Exchange environments and track all cmdlets
     [bool]$mSOLActive = $false
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
@@ -82,6 +78,10 @@ function Initialize-O365User
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
             } #End Try
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
+        }
+
+    If (!(Get-AdServerSettings).ViewEntireForest) {
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
         }
 
     # create an Empty settings log before check
@@ -307,10 +307,6 @@ function Move-O365User
         catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
         }
 
-    If (!(Get-AdServerSettings).ViewEntireForest) {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        }
-
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
@@ -334,6 +330,10 @@ function Move-O365User
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
     
+    If (!(Get-AdServerSettings).ViewEntireForest) {
+        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+        }
+
     #Begin MigrationBatch
     If ($UserList) {
         
@@ -577,13 +577,8 @@ function Complete-O365User
     #Import UserList into a workingList
     $workingList = import-csv $SettingsOutFile
 
-    If (!(Get-AdServerSettings).ViewEntireForest) {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        }
-
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
-    $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
     If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
 
@@ -593,6 +588,7 @@ function Complete-O365User
             } #End Try
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
+    
     Import-PSSession $mSOLSession -AllowClobber
     [bool]$mSOLActive = $true
 
