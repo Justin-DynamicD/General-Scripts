@@ -32,7 +32,7 @@ function Initialize-O365User
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
-    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed"}
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed" -ErrorAction "Stop"}
 
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
@@ -69,7 +69,7 @@ function Initialize-O365User
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
 
-    If (!localSession) {
+    If (!$localSession) {
         Try {
             . $exchangeModules
             Connect-ExchangeServer -Auto
@@ -169,6 +169,7 @@ function Initialize-O365User
             #Check for MSOline licenses
             If (!(Get-MsolUser -UserPrincipalName $target).isLicensed) {
                 Try {
+                    Set-MsolUser -UserPrincipalName $target -UsageLocation US
                     Set-MsolUserLicense -UserPrincipalName $target -AddLicenses viacom:ENTERPRISEPACK
                     [string]$mSOLLicenseUpdate = 'added'
                     }
@@ -177,7 +178,7 @@ function Initialize-O365User
                     [string]$mSOLLicenseUpdate = 'needed'
                     }
                 }
-                
+
             #Check each user to be a member of the groups
             $members=@()
             ForEach ($group in $groupList) {
@@ -280,12 +281,13 @@ function Move-O365User
     #Variables specific to client
     $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
+    $exchangeModules = "E:\Program Files\Microsoft\Exchange Server\V14\bin\RemoteExchange.ps1" #location of the Exchange cmdlets on local server
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
-    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed"}
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed" -ErrorAction "Stop"}
     
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
@@ -315,6 +317,16 @@ function Move-O365User
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
     If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
 
+
+    If (!$localSession) {
+        Try {
+            . $exchangeModules
+            Connect-ExchangeServer -Auto
+            $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
+            [bool]$mSOLActive = $false
+            } #End Try
+        Catch {write-error "Cannot connect to Internal Exchange!" -ErrorAction "Stop"}
+        }
     If (!$mSOLActive) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
@@ -550,10 +562,11 @@ function Complete-O365User
     #Variables specific to client
     $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
+    
 
     #Validate parameter combinations are valid
     If (!(Test-Path $SettingsOutFile)) {write-error "Cannot find $SettingsOutFile" -ErrorAction "Stop"}
-    
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed" -ErrorAction "Stop"}
 
     #Generate Migration Batch name if not provided
     if (!$MigrationBatch) {
@@ -577,11 +590,11 @@ function Complete-O365User
     If (!$mSOLActive) {
         Try {
             $mSOLSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.outlook.com/powershell -Credential $OnlineCredentials -Authentication Basic -AllowRedirection
-            Import-PSSession $mSOLSession -AllowClobber
-            [bool]$mSOLActive = $false
             } #End Try
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
+    Import-PSSession $mSOLSession -AllowClobber
+    [bool]$mSOLActive = $true
 
     #Look for MigrationBatch and Complete Migration
     $currentBatch = Get-MigrationBatch $MigrationBatch
