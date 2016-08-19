@@ -18,7 +18,6 @@ function Initialize-O365User
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
         [System.Management.Automation.PSCredential]$OnlineCredentials
-
     )
 
     #Variables specific to client
@@ -78,10 +77,6 @@ function Initialize-O365User
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
 
-    If (!(Get-AdServerSettings).ViewEntireForest) {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        }
-
     # create an Empty settings log before check
     [System.Collections.ArrayList]$settingsOutLog = @()
 
@@ -111,6 +106,9 @@ function Initialize-O365User
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
                 [bool]$mSOLActive = $false
+                If (!(Get-AdServerSettings).ViewEntireForest) {
+                    Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+                    }
                 }
             catch {
                 write-error "can't switch context to local session" -ErrorAction "Stop"
@@ -326,10 +324,6 @@ function Move-O365User
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
     
-    If (!(Get-AdServerSettings).ViewEntireForest) {
-        Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
-        }
-
     #Begin MigrationBatch
     If ($UserList) {
         
@@ -338,6 +332,9 @@ function Move-O365User
                 Try {
                     $importResults = Import-PSSession $localSession -AllowClobber
                     [bool]$mSOLActive = $false
+                     If (!(Get-AdServerSettings).ViewEntireForest) {
+                        Set-ADServerSettings -ViewEntireForest $true
+                        }
                     }
                 catch {
                     write-error "can't switch context to local session" -ErrorAction "Stop"
@@ -444,6 +441,9 @@ function Move-O365User
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
                 [bool]$mSOLActive = $false
+                 If (!(Get-AdServerSettings).ViewEntireForest) {
+                    Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
+                    }
                 }
             catch {
                 write-error "can't switch context to local session" -ErrorAction "Stop"
