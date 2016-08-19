@@ -31,7 +31,7 @@ function Initialize-O365User
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
-    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed" -ErrorAction "Stop"}
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only v$($PSVersionTable.PSVersion.Major).  At least v3 must be installed" -ErrorAction "Stop"}
 
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
@@ -270,7 +270,7 @@ function Move-O365User
         [System.Management.Automation.PSCredential]$OnlineCredentials,
 
         # LocalCredentials These are the credentials require to sign into your Exchange Environment
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [System.Management.Automation.PSCredential]$LocalCredentials
     )
 
@@ -283,6 +283,7 @@ function Move-O365User
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
     If (!$UserName -and !$UserList) {write-error "You must specify either UserName or UserList" -ErrorAction "Stop"}
     If ($UserList -and !(Test-Path $UserList)) {write-error "Cannot find the UserList!" -ErrorAction "Stop"}
+    if (($NULL -eq $LocalCredentials) -and ($UserName)) {write-error "O365 requires -LocalCredentials to be supplied in order to move single mailboxes" -ErrorAction "Stop"}
     If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed" -ErrorAction "Stop"}
     
     #Generate Log filename
