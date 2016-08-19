@@ -45,7 +45,7 @@ function Initialize-O365User
     
     #Import UserList into a workingList
     If ($UserList) {$workingList = Get-Content $UserList}
-    Else {$workingList = $UserName}
+    Else {[array]$workingList = $UserName}
 
     #Load AD/MSOnline modules
     If (!(Get-module ActiveDirectory)) {
