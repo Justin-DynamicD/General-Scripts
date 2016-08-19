@@ -155,7 +155,7 @@ function Initialize-O365User
                             } #End numeric incriment
                         } #found a non-existant address!
                     Write-Verbose "Adding address $newProxy"
-                    set-mailbox $currentMailbox -Emailaddresses @{add = $newProxy}
+                    set-mailbox $currentMailbox.UserPrincipalName -Emailaddresses @{add = $newProxy}
                     [string]$ProxyAddressUpdate = $newProxy
                     }
                 Catch {
