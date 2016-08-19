@@ -192,7 +192,7 @@ function Initialize-O365User
                 } #End ForEach
 
             #Gather all smtp addresses and compare to online list
-            $addr = $currentMailbox.emailaddresses | Select-Object -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
+            $addr = $currentMailbox.emailaddresses | Where-Object {$_ -like "smtp:*"}
             $addr = ($addr | foreach-Object {($_.split("@",2))[1]})
             [System.Collections.ArrayList]$missingDomainList = @()
             Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item) | Out-Null }}
@@ -224,7 +224,6 @@ function Initialize-O365User
     $settingsOutLog | export-csv -Path $SettingsOutFile -Force
 
 } #End Function
-
 
 function Move-O365User 
 {
