@@ -26,7 +26,7 @@ function Initialize-O365User
     $groupDomain = "corp.ad.viacom.com" #Domains that above groups are members of
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
-    $exchangeModules = "E:\Program Files\Microsoft\Exchange Server\V14\bin\RemoteExchange.ps1" #location of the Exchange cmdlets on local server
+    $exchangeServer = "abfabnj50.mtvn.ad.viacom.com" #location of the Exchange cmdlets on local server
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
@@ -67,11 +67,9 @@ function Initialize-O365User
 
     If (!$localSession) {
         Try {
-            . $exchangeModules
-            Connect-ExchangeServer -Auto
-            $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
+            $localSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://$exchangeServer/powershell -Authentication Kerberos -AllowRedirection
             } #End Try
-        Catch {write-error "Cannot connect to INternal Exchange!" -ErrorAction "Stop"}
+        Catch {write-error "Cannot connect to Internal Exchange!" -ErrorAction "Stop"}
         }
     If (!$mSOLSession) {
         Try {
@@ -97,7 +95,7 @@ function Initialize-O365User
         }
     
     #Gather list of accepted Domains for comparison
-    $mSOLAcceptedDomain = Get-AcceptedDomain | select -ExpandProperty DomainName
+    $mSOLAcceptedDomain = Get-AcceptedDomain | select-object -ExpandProperty DomainName
 
     #Begin per-user Loop and track progress
     [int]$totalCount = $workingList.count
@@ -126,7 +124,7 @@ function Initialize-O365User
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
             $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
-            IF ($currentMailbox -eq $NULL) {Throw "$target mailbox could not be found locally"}
+            IF ($NULL -eq $currentMailbox) {Throw "$target mailbox could not be found locally"}
             }
         Catch {
             [bool]$userExist = $false
@@ -149,12 +147,12 @@ function Initialize-O365User
                 }
             
             #Check for Proxy Address, add if missing
-            $existingSMTPcheck = $currentMailbox.emailAddresses | where {($_.PrefixString -eq "smtp") -and ($_.AddressString -like "*@$onlineSMTP")}
-            IF ($existingSMTPcheck -eq $NULL) {
+            $existingSMTPcheck = $currentMailbox.emailAddresses | Where-Object {($_.PrefixString -eq "smtp") -and ($_.AddressString -like "*@$onlineSMTP")}
+            IF ($NULL -eq $existingSMTPcheck) {
                 Try {
                     $newProxy = $currentMailbox.primarysmtpaddress.local +"@"+$onlineSMTP
-                    If ((get-mailbox $newProxy) -ne $null) {
-                        For ($i=0,((get-mailbox $newProxy) -ne $null),$i++) {
+                    If ($null -ne (get-mailbox $newProxy)) {
+                        For ($i=0,($null -ne (get-mailbox $newProxy)),$i++) {
                             $newProxy = $currentMailbox.primarysmtpaddress.local + $i +"@"+$onlineSMTP
                             } #End numeric incriment
                         } #found a non-existant address!
@@ -184,7 +182,7 @@ function Initialize-O365User
             $members=@()
             ForEach ($group in $groupList) {
                 try {
-                    $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select -ExpandProperty distinguishedname
+                    $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select-Object -ExpandProperty distinguishedname
                     }
                 Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
 
@@ -196,8 +194,8 @@ function Initialize-O365User
                 } #End ForEach
 
             #Gather all smtp addresses and compare to online list
-            $addr = $currentMailbox.emailaddresses | Select -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
-            $addr = ($addr | foreach {($_.split("@",2))[1]})
+            $addr = $currentMailbox.emailaddresses | Select-Object -ExpandProperty ProxyAddressString | Where-Object {$_ -like "smtp:*"}
+            $addr = ($addr | foreach-Object {($_.split("@",2))[1]})
             [System.Collections.ArrayList]$missingDomainList = @()
             Foreach ($item in $addr) {If ($mSOLAcceptedDomain -notcontains $item) {$missingDomainList.add($item) | Out-Null }}
             [string]$missingDomainList = $missingDomainList -join "`r`n"
@@ -282,7 +280,7 @@ function Move-O365User
     #Variables specific to client
     $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
-    $exchangeModules = "E:\Program Files\Microsoft\Exchange Server\V14\bin\RemoteExchange.ps1" #location of the Exchange cmdlets on local server
+    $exchangeServer = "abfabnj50.mtvn.ad.viacom.com" #location of the local server
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
@@ -312,14 +310,11 @@ function Move-O365User
     [bool]$mSOLActive = $false
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
-    If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
-
+    If ($NULL -ne $mSOLSession) {[bool]$mSOLActive = $true}
 
     If (!$localSession) {
         Try {
-            . $exchangeModules
-            Connect-ExchangeServer -Auto
-            $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
+            $localSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://$exchangeServer/powershell -Authentication Kerberos -AllowRedirection
             [bool]$mSOLActive = $false
             } #End Try
         Catch {write-error "Cannot connect to Internal Exchange!" -ErrorAction "Stop"}
@@ -360,7 +355,7 @@ function Move-O365User
                     IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
                     $currentUser = $currentUser[0]
                     $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
-                    IF ($currentMailbox -eq $NULL) {Throw "$target mailbox could not be found locally"}
+                    IF ($NULL -eq $currentMailbox) {Throw "$target mailbox could not be found locally"}
                     [string]$primarySMTP = $currentMailbox.primarysmtpaddress
                     }
                 Catch {
@@ -462,7 +457,7 @@ function Move-O365User
             IF ($currentuser.count -ne 1) {Throw "$target did not return a unique value"}
             $currentUser = $currentUser[0]
             $currentMailbox = get-mailbox $currentUser.UserPrincipalName -ErrorAction "Stop"
-            IF ($currentMailbox -eq $NULL) {Throw "$target mailbox could not be found locally"}
+            IF ($NULL -eq $currentMailbox) {Throw "$target mailbox could not be found locally"}
             [string]$primarySMTP = $currentMailbox.primarysmtpaddress
             }
         Catch {
@@ -583,7 +578,7 @@ function Complete-O365User
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
-    If ($mSOLSession -ne $NULL) {[bool]$mSOLActive = $true}
+    If ($NULL -ne $mSOLSession) {[bool]$mSOLActive = $true}
 
     If (!$mSOLActive) {
         Try {
@@ -597,7 +592,7 @@ function Complete-O365User
 
     #Look for MigrationBatch and Complete Migration
     $currentBatch = Get-MigrationBatch $MigrationBatch
-    If ($currentBatch -eq $NULL) {
+    If ($NULL -eq $currentBatch) {
         write-error "cannot find Migration Batch $MigrationBatch, please verify it exists or use -MigrationBatch flag" -ErrorAction "Stop"
         }
     Else {
@@ -634,7 +629,7 @@ function Complete-O365User
 
 } #End Function
 
-function New-ManagedFolder
+function Add-ManagedFolder
 {
     Param(
         [Parameter(Mandatory=$True)]
@@ -687,14 +682,14 @@ function New-ManagedFolder
 
     if ($FindFolderResults.TotalCount -eq 0) {  
 
-        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where {$_.DisplayName -eq $RetentionTag})
+        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where-object {$_.DisplayName -eq $RetentionTag})
 
         $Folder.PolicyTag = New-Object Microsoft.Exchange.WebServices.Data.PolicyTag($true,$Tag.RetentionId)
         $Folder.Save($EWSParentFolder.Id)
     }  
     elseif ($FindFolderResults.TotalCount -eq 1) {  
         Write-Verbose ("The folder '$FolderName' already exists in mailbox '$TargetMailbox'")
-        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where {$_.DisplayName -eq $RetentionTag})
+        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where-object {$_.DisplayName -eq $RetentionTag})
         $Folder = $FindFolderResults[0]
         $Folder.PolicyTag = New-Object Microsoft.Exchange.WebServices.Data.PolicyTag($true,$Tag.RetentionId)
         $Folder.Save($EWSParentFolder.Id)
