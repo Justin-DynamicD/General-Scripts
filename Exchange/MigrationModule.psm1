@@ -145,13 +145,13 @@ function Initialize-O365User
                 }
             
             #Check for Proxy Address, add if missing
-            $existingSMTPcheck = $currentMailbox.emailAddresses | Where-Object {($_.PrefixString -eq "smtp") -and ($_.AddressString -like "*@$onlineSMTP")}
+            $existingSMTPcheck = $currentMailbox.emailAddresses | Where-Object {($_ -like "smtp:*") -and ($_ -like "*@$onlineSMTP")}
             IF ($NULL -eq $existingSMTPcheck) {
                 Try {
-                    $newProxy = $currentMailbox.primarysmtpaddress.local +"@"+$onlineSMTP
+                    $newProxy = $currentMailbox.primarysmtpaddress.split("@",2)[0] +"@"+$onlineSMTP
                     If ($null -ne (get-mailbox $newProxy)) {
                         For ($i=0,($null -ne (get-mailbox $newProxy)),$i++) {
-                            $newProxy = $currentMailbox.primarysmtpaddress.local + $i +"@"+$onlineSMTP
+                            $newProxy = $currentMailbox.primarysmtpaddress.split("@",2)[0] + $i +"@"+$onlineSMTP
                             } #End numeric incriment
                         } #found a non-existant address!
                     Write-Verbose "Adding address $newProxy"
