@@ -61,6 +61,7 @@ function Initialize-O365User
 
     #Connect to the Exchange environments and track all cmdlets
     [bool]$mSOLActive = $false
+    [bool]$sessionsImported = $false
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
 
@@ -84,6 +85,7 @@ function Initialize-O365User
     Try {
         $importResults = Import-PSSession $mSOLSession -AllowClobber
         [bool]$mSOLActive = $true
+        [bool]$sessionsImported = $true
         }
     catch {
         write-error "can't switch context to MSOL session" -ErrorAction "Stop"
@@ -102,10 +104,11 @@ function Initialize-O365User
         Write-Progress -Activity "Checking $target" -PercentComplete (($currentCount / $totalCount)*100) -Status "analyzing..."
         
         #Set Current Session to Local Host
-        IF ($mSOLActive) {
+        IF ($mSOLActive -or !$sessionsImported) {
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
                 [bool]$mSOLActive = $false
+                [bool]$sessionsImported = $true
                 If (!(Get-AdServerSettings).ViewEntireForest) {
                     Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
                     }
@@ -305,6 +308,7 @@ function Move-O365User
         }
 
     #Connect to the Exchange online environment and track all cmdlets
+    [bool]$sessionsImported = $false
     [bool]$mSOLActive = $false
     $localSession = Get-PSSession | Where-Object {$_.ComputerName -like "*.viacom.com"}
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
@@ -328,9 +332,10 @@ function Move-O365User
     If ($UserList) {
         
             #Set Current Session to Local Host
-            IF ($mSOLActive) {
+            IF ($mSOLActive -or !$sessionsImported) {
                 Try {
                     $importResults = Import-PSSession $localSession -AllowClobber
+                    [bool]$sessionsImported = $true
                     [bool]$mSOLActive = $false
                      If (!(Get-AdServerSettings).ViewEntireForest) {
                         Set-ADServerSettings -ViewEntireForest $true
@@ -396,6 +401,7 @@ function Move-O365User
                 Try {
                     $importResults = Import-PSSession $mSOLSession -AllowClobber
                     Write-Verbose $importResults
+                    [bool]$sessionsImported = $true
                     [bool]$mSOLActive = $true
                     }
                 catch {
@@ -437,9 +443,10 @@ function Move-O365User
     Else {
         $target = $UserName
         #Set Current Session to Local Host
-        IF ($mSOLActive) {
+        IF ($mSOLActive -or !$sessionsImported) {
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
+                [bool]$sessionsImported = $true
                 [bool]$mSOLActive = $false
                  If (!(Get-AdServerSettings).ViewEntireForest) {
                     Set-ADServerSettings -ViewEntireForest $true -WarningAction "SilentlyContinue"
@@ -484,6 +491,7 @@ function Move-O365User
             Try {
                 $importResults = Import-PSSession $mSOLSession -AllowClobber
                 Write-Verbose $importResults
+                [bool]$sessionsImported = $true
                 [bool]$mSOLActive = $true
                 }
             catch {
@@ -577,6 +585,7 @@ function Complete-O365User
 
     #Connect to the Exchange online environment and track all cmdlets
     [bool]$mSOLActive = $false
+    [bool]$sessionsImported = $false
     $mSOLSession = Get-PSSession | Where-Object {$_.ComputerName -eq "ps.outlook.com"}
     If ($NULL -ne $mSOLSession) {[bool]$mSOLActive = $true}
 
@@ -589,6 +598,7 @@ function Complete-O365User
     
     Import-PSSession $mSOLSession -AllowClobber
     [bool]$mSOLActive = $true
+    [bool]$sessionsImported = $true
 
     #Look for MigrationBatch and Complete Migration
     $currentBatch = Get-MigrationBatch $MigrationBatch
