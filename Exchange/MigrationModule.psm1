@@ -167,7 +167,12 @@ function Initialize-O365User
                 }
             
             #Check for MSOline licenses
-            If (!(Get-MsolUser -UserPrincipalName $target).isLicensed) {
+            If ($NULL -eq ((Get-MsolUser -UserPrincipalName $target).ImmutableID)) {
+                    [string]$mSOLLicenseUpdate = 'not a synced account'
+                    write-warning "not a synced account!"
+                    }
+
+            If (!(Get-MsolUser -UserPrincipalName $target).isLicensed -and ($mSOLLicenseUpdate -ne "not a synced account")) {
                 Try {
                     Set-MsolUser -UserPrincipalName $target -UsageLocation US
                     Set-MsolUserLicense -UserPrincipalName $target -AddLicenses viacom:ENTERPRISEPACK
@@ -178,6 +183,7 @@ function Initialize-O365User
                     [string]$mSOLLicenseUpdate = 'needed'
                     }
                 }
+            
 
             #Check each user to be a member of the groups
             $members=@()
