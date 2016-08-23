@@ -437,7 +437,7 @@ function Move-O365User
                 } #End Try
             Catch {
                 Write-Error $_.Exception.Message  
-                Write-Error "MigrationBatch setup failed, review Batchname RemoteOnBoarding" -ErrorAction "Stop" 
+                Write-Error "MigrationBatch setup failed, review Batchname $remoteOnBoarding" -ErrorAction "Stop" 
                 }
 
             Write-Output "Migration batch $remoteOnboarding has been started and policies saved to $SettingsOutFile"
