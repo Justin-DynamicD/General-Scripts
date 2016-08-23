@@ -581,7 +581,7 @@ function Complete-O365User
 
     #Validate parameter combinations are valid
     If (!(Test-Path $SettingsOutFile)) {write-error "Cannot find $SettingsOutFile" -ErrorAction "Stop"}
-    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only $($PSVersionTable.PSVersion.Major).  At least 3 must be installed" -ErrorAction "Stop"}
+    If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only v$($PSVersionTable.PSVersion.Major).  At least v3 must be installed" -ErrorAction "Stop"}
 
     #Generate Migration Batch name if not provided
     if (!$MigrationBatch) {
