@@ -26,6 +26,7 @@ function Initialize-O365User
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
     $exchangeServer = "abfabnj50.mtvn.ad.viacom.com" #location of the Exchange cmdlets on local server
+    $MSOLAccountSkuId = "viacom:ENTERPRISEPACK"
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
@@ -171,11 +172,20 @@ function Initialize-O365User
                     [string]$mSOLLicenseUpdate = 'not a synced account'
                     write-warning "not a synced account!"
                     }
+            
+            If (!($mSOLLicenseUpdate -ne 'not a synced account')) {
+                $isLicensed = (Get-MsolUser -UserPrincipalName $target).isLicensed
+                $provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses.servicestatus[9].provisioningstatus
+                }
 
-            If (!(Get-MsolUser -UserPrincipalName $target).isLicensed -and ($mSOLLicenseUpdate -ne "not a synced account")) {
+            If (($provisioningStatus -ne "Success") -and ($mSOLLicenseUpdate -ne "not a synced account")) {
                 Try {
-                    Set-MsolUser -UserPrincipalName $target -UsageLocation US
-                    Set-MsolUserLicense -UserPrincipalName $target -AddLicenses viacom:ENTERPRISEPACK
+                    If (!$isLicensed) {
+                        Set-MsolUser -UserPrincipalName $target -UsageLocation US
+                        Set-MsolUserLicense -UserPrincipalName $target -AddLicenses $MSOLAccountSkuId
+                        }
+                    $lO = New-MsolLicenseOptions -AccountSkuId $MSOLAccountSkuId
+                    Set-MsolUserLicense -UserPrincipalName $target -AddLicenses $MSOLAccountSkuId -LicenseOptions $lO
                     [string]$mSOLLicenseUpdate = 'added'
                     }
                 Catch {
