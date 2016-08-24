@@ -173,7 +173,7 @@ function Initialize-O365User
                     write-warning "not a synced account!"
                     }
             
-            If (!($mSOLLicenseUpdate -ne 'not a synced account')) {
+            If ($mSOLLicenseUpdate -ne 'not a synced account') {
                 $isLicensed = (Get-MsolUser -UserPrincipalName $target).isLicensed
                 $provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses.servicestatus[9].provisioningstatus
                 }
