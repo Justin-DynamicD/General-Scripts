@@ -184,9 +184,11 @@ function Initialize-O365User
             If (($provisioningStatus -ne "Success") -and ($mSOLLicenseUpdate -ne "not a synced account")) {
                 Try {
                     If (!$isLicensed) {
+                        Write-verbose "Adding license to $target"
                         Set-MsolUser -UserPrincipalName $target -UsageLocation US
                         Set-MsolUserLicense -UserPrincipalName $target -AddLicenses $MSOLAccountSkuId
                         }
+                    Write-Verbose "Adding License Option to $target"
                     $lO = New-MsolLicenseOptions -AccountSkuId $MSOLAccountSkuId
                     Set-MsolUserLicense -UserPrincipalName $target -LicenseOptions $lO
                     [string]$mSOLLicenseUpdate = 'added'
