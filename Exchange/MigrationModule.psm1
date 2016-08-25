@@ -175,7 +175,10 @@ function Initialize-O365User
             
             If ($mSOLLicenseUpdate -ne 'not a synced account') {
                 $isLicensed = (Get-MsolUser -UserPrincipalName $target).isLicensed
-                $provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses.servicestatus[9].provisioningstatus
+                If ($provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses) {
+                    $provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses.servicestatus[9].provisioningstatus
+                    }
+                Else {$provisioningStatus = "Not Available"}
                 }
 
             If (($provisioningStatus -ne "Success") -and ($mSOLLicenseUpdate -ne "not a synced account")) {
@@ -185,7 +188,7 @@ function Initialize-O365User
                         Set-MsolUserLicense -UserPrincipalName $target -AddLicenses $MSOLAccountSkuId
                         }
                     $lO = New-MsolLicenseOptions -AccountSkuId $MSOLAccountSkuId
-                    Set-MsolUserLicense -UserPrincipalName $target -AddLicenses $MSOLAccountSkuId -LicenseOptions $lO
+                    Set-MsolUserLicense -UserPrincipalName $target -LicenseOptions $lO
                     [string]$mSOLLicenseUpdate = 'added'
                     }
                 Catch {
