@@ -631,8 +631,8 @@ function Complete-O365User
         }
     Else {
         If ($currentBatch.Status.value -like "Synced*") {
-            Complete-MigrationBatch -Identity $currentBatch.Identity -force
-            while ((Get-MigrationBatch $currentBatch).Status.value -ne "Completed") {Start-Sleep -seconds 60}
+            Complete-MigrationBatch -Identity $currentBatch.Identity.Name
+            while ((Get-MigrationBatch $MigrationBatch).Status.value -ne "Completed") {Start-Sleep -seconds 60}
             }
         }
 
