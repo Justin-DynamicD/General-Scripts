@@ -456,7 +456,8 @@ function Move-O365User
                 Write-Error $_.Exception.Message  
                 Write-Error "MigrationBatch setup failed, review Batchname $remoteOnBoarding" -ErrorAction "Stop" 
                 }
-
+            
+            Write-Output " "
             Write-Output "Migration batch $remoteOnboarding has been started and policies saved to $SettingsOutFile"
             Remove-Item -Path $tmpFileName -force
 
@@ -534,18 +535,27 @@ function Move-O365User
                 } #End write-progress
             } #End Try
         Catch {
-            Write-Error $_.Exception.Message  -ErrorAction "Stop" #review this one later, should contiue next on error
+            Write-Error $_.Exception.Message  -ErrorAction "Stop"
             }
+        
+        #Define a hashtable to splat settings
+        $splatMailbox = @{Identity = $primarySMTP}
 
         #update Storage Policy
         If ($DBSendQuota -ne "unlimited") {$DBSendQuota = ($currentUser.DBSendQuota).split(" ",3)[0] + ($currentUser.DBSendQuota).split(" ",3)[1]}
         If ($DBReceiveQuota -ne "unlimited") {$DBReceiveQuota = ($DBReceiveQuota).split(" ",3)[0] + ($DBReceiveQuota).split(" ",3)[1]}
         If ($DBWarning -ne "unlimited") {$DBWarning = ($DBWarning).split(" ",3)[0] + ($DBWarning).split(" ",3)[1]}
-        set-mailbox -Identity $primarySMTP -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+        $splatMailbox += @{ProhibitSendQuota = $DBSendQuota}
+        $splatMailbox += @{ProhibitSendReceiveQuota = $DBReceiveQuota}
+        $splatMailbox += @{IssueWarningQuota = $DBWarning}
 
-        #Update RetentionPolicy
-        Write-Verbose "Applying RetentionPolicy to $primarySMTP"
-        Set-mailbox -Identity $primarySMTP -RetentionPolicy $retentionPolicy
+        #Update RetentionPolicy and Deleteditemretention
+        $splatMailbox += @{RetentionPolicy = $retentionPolicy}
+        $splatMailbox += @{RetainDeletedItemsFor = 30}
+        
+        #Apply Settings to mailbox
+        write-verbose "Updating Mailbox with stored settings"
+        Set-mailbox $splatMailbox
 
         #Disable Clutter
         Write-Verbose "Disabling Clutter for $primarySMTP"
@@ -634,7 +644,10 @@ function Complete-O365User
     Else {
         If ($currentBatch.Status.value -like "Synced*") {
             Complete-MigrationBatch -Identity $currentBatch.Identity.Name
-            while ((Get-MigrationBatch $MigrationBatch).Status.value -ne "Completed") {Start-Sleep -seconds 60}
+            while ((Get-MigrationBatch $MigrationBatch).Status.value -notlike "Completed*") {
+                Write-Output "$((Get-MigrationBatch $MigrationBatch).Status.value)..."
+                Start-Sleep -seconds 60
+                } #End Wait
             }
         }
 
@@ -643,23 +656,31 @@ function Complete-O365User
     [int]$currentCount = 0
     foreach ($currentUser in $workingList) {
         $currentCount ++ | Out-Null
-        Write-Progress -Activity "Checking $currentUser" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
+        Write-Progress -Activity "Updating Mailboxes" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
         
+        #Define a hashtable to splat settings
+        $splatMailbox = @{Identity = $currentUser.MailboxName}   
+
         #update Storage Policy
         Write-Verbose "Applying StorageQuotas to $($currentUser.MailboxName)"
         $DBSendQuota = ($currentUser.DBSendQuota).split(" ",3)[0] + ($currentUser.DBSendQuota).split(" ",3)[1]
         $DBReceiveQuota = ($currentUser.DBReceiveQuota).split(" ",3)[0] + ($currentUser.DBReceiveQuota).split(" ",3)[1]
         $DBWarning = ($currentUser.DBWarning).split(" ",3)[0] + ($currentUser.DBWarning).split(" ",3)[1]
+        $splatMailbox += @{ProhibitSendQuota = $DBSendQuota}
+        $splatMailbox += @{ProhibitSendReceiveQuota = $DBReceiveQuota}
+        $splatMailbox += @{IssueWarningQuota = $DBWarning}
 
-        set-mailbox $currentUser.MailboxName -ProhibitSendQuota $DBSendQuota -ProhibitSendReceiveQuota $DBReceiveQuota -IssueWarningQuota $DBWarning
+        #Update RetentionPolicy and Deleteditemretention
+        $splatMailbox += @{RetentionPolicy = $currentUser.retentionPolicy}
+        $splatMailbox += @{RetainDeletedItemsFor = 30}
 
-        #Update RetentionPolicy
-        Write-Verbose "Applying RetentionPolicy to $($currentUser.MailboxName)"
-        Set-mailbox -Identity $currentUser.MailboxName -RetentionPolicy $currentUser.retentionPolicy
+        #Apply Settings to mailbox
+        write-verbose "Updating Mailbox with stored settings for $($currentUser.MailboxName)"
+        Set-mailbox $splatMailbox
 
         #Disable Clutter
         Write-Verbose "Disabling Clutter for $($currentUser.MailboxName)"
-        Set-Clutter -Identity $currentUser.MailboxName -Enable $false
+        Set-Clutter -Identity $currentUser.MailboxName -Enable $false | Out-Null
 
         } #End ForEach
 
