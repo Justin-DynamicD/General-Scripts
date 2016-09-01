@@ -656,7 +656,7 @@ function Complete-O365User
     [int]$currentCount = 0
     foreach ($currentUser in $workingList) {
         $currentCount ++ | Out-Null
-        Write-Progress -Activity "Updating Mailboxes" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
+        Write-Progress -Activity "Updating $($currentUser.MailboxName)" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
         
         #Define a hashtable to splat settings
         $splatMailbox = @{Identity = $currentUser.MailboxName}   
