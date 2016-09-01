@@ -602,13 +602,18 @@ function Complete-O365User
     )
 
     #Variables specific to client
-    $targetDeliveryDomain = "viacom.mail.onmicrosoft.com"
-    $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
-    
+    $groupList = "zdm Migration to Office 365" #Ensures users are a member of listed groups.
+    $groupDomain = "paramount.ad.viacom.com" #Domains that above groups are members of
 
     #Validate parameter combinations are valid
     If (!(Test-Path $SettingsOutFile)) {write-error "Cannot find $SettingsOutFile" -ErrorAction "Stop"}
     If ($PSVersionTable.PSVersion.Major -lt 3) {Write-Error "Powershell version is only v$($PSVersionTable.PSVersion.Major).  At least v3 must be installed" -ErrorAction "Stop"}
+
+    #Load AD/MSOnline modules
+    If (!(Get-module ActiveDirectory)) {
+        Try {import-module ActiveDirectory}
+        catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
+        }    
 
     #Generate Migration Batch name if not provided
     if (!$MigrationBatch) {
@@ -682,7 +687,22 @@ function Complete-O365User
         Write-Verbose "Disabling Clutter for $($currentUser.MailboxName)"
         Set-Clutter -Identity $currentUser.MailboxName -Enable $false | Out-Null
 
-        } #End ForEach
+        #validate user is a member of the groups
+        $members=@()
+        ForEach ($group in $groupList) {
+            try {
+                $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select-Object -ExpandProperty distinguishedname
+                }
+            Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
+
+            If ($members -notcontains $currentUser.MailboxName) {
+                Write-Verbose "adding $($currentUser.MailboxName) to $group"
+                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.MailboxName
+                $splatMailbox += @{GroupUpdated = "True"}
+                } #End If-Match
+            } #End Group-ForEach
+
+        } #End CurrentUser-ForEach
 
 } #End Function
 
