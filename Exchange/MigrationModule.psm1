@@ -17,7 +17,11 @@ function Initialize-O365User
 
         # OnlineCredentials These are the credentials require to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
-        [System.Management.Automation.PSCredential]$OnlineCredentials
+        [System.Management.Automation.PSCredential]$OnlineCredentials,
+
+        # ReportOnly This switch disables anything from being changed and only reports
+        [Parameter(Mandatory=$false)]
+        [switch]$ReportOnly
     )
 
     #Variables specific to client
@@ -159,7 +163,7 @@ function Initialize-O365User
                             } #End numeric incriment
                         } #found a non-existant address!
                     Write-Verbose "Adding address $newProxy"
-                    set-mailbox $currentMailbox.UserPrincipalName -Emailaddresses @{add = $newProxy}
+                    If (!$ReportOnly) {set-mailbox $currentMailbox.UserPrincipalName -Emailaddresses @{add = $newProxy}}
                     [string]$ProxyAddressUpdate = $newProxy
                     }
                 Catch {
@@ -186,13 +190,13 @@ function Initialize-O365User
                     $licenseSplat = @{UserPrincipalName = $target}
                     If (!$isLicensed) {
                         Write-verbose "Adding license to $target"
-                        Set-MsolUser -UserPrincipalName $target -UsageLocation US
+                        If (!$ReportOnly) {Set-MsolUser -UserPrincipalName $target -UsageLocation US}
                         $licenseSplat +=@{AddLicenses = $MSOLAccountSkuId}
                         }
                     Write-Verbose "Adding License Option to $target"
                     $lO = New-MsolLicenseOptions -AccountSkuId $MSOLAccountSkuId
                     $licenseSplat +=@{LicenseOptions = $lO}
-                    Set-MsolUserLicense @licenseSplat
+                    If (!$ReportOnly) {Set-MsolUserLicense @licenseSplat}
                     [string]$mSOLLicenseUpdate = 'added'
                     }
                 Catch {
@@ -212,7 +216,7 @@ function Initialize-O365User
 
                 If ($members -notcontains $currentUser.distinguishedname) {
                     Write-Verbose "adding $currentUser.Name to $group"
-                    Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser
+                    IF (!$ReportOnly) {Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser}
                     $groupsUpdated = $true
                     } #End Match
                 } #End ForEach
