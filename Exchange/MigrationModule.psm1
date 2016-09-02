@@ -46,7 +46,7 @@ function Initialize-O365User
     ElseIf ($UserName -and !$SettingsOutFile) {
         $SettingsOutFile = $UserName + " Init " + (get-date -format m) + ".csv"
         }
-    Write-Information "Log File set to $SettingsOutFile"
+    Write-Output "Log File set to $SettingsOutFile"
 
     #Import UserList into a workingList
     If ($UserList) {$workingList = Get-Content $UserList}
@@ -113,7 +113,7 @@ function Initialize-O365User
         
         #Set Current Session to Local Host
         IF ($mSOLActive -or !$sessionsImported) {
-            Write-Information "Switching to Local Session"
+            Write-Output "Switching to Local Session"
             Try {
                 $importResults = Import-PSSession $localSession -AllowClobber
                 [bool]$mSOLActive = $false
@@ -128,7 +128,7 @@ function Initialize-O365User
             }
 
         #Get CurrentUser and needed SMTP values
-        Write-Information "Importing settings for $target"
+        Write-Output "Importing settings for $target"
         Try {
             $currentUser = @()
             $currentUser += get-aduser -server $globalCatalog -filter {UserPrincipalName -eq $target} -ErrorAction "Stop"
@@ -150,7 +150,7 @@ function Initialize-O365User
 
         #UserExist Check
         If ($userExist) {
-            Write-Information "Comparing UPN to primary SMTP"
+            Write-Output "Comparing UPN to primary SMTP"
             #Check UPN to primary address
             IF ($currentUser.UserPrincipalName -ne [string]$currentMailbox.primarysmtpaddress) {
                 Write-Warning "the UPN and primary SMTP do not match.  Please correct"
@@ -158,19 +158,19 @@ function Initialize-O365User
                 }
             
             #Check for Proxy Address, add if missing
-            Write-Information "checking for existing $onlineSMTP address"
+            Write-Output "checking for existing $onlineSMTP address"
             $existingSMTPcheck = $currentMailbox.emailAddresses | Where-Object {($_ -like "smtp:*") -and ($_ -like "*@$onlineSMTP")}
             IF ($NULL -eq $existingSMTPcheck) {
                 Try {
                     $newProxy = $currentMailbox.primarysmtpaddress.split("@",2)[0] +"@"+$onlineSMTP
-                    Write-Information "address not found, checking if $newProxy is available."
+                    Write-Output "address not found, checking if $newProxy is available."
                     If ($null -ne (get-mailbox $newProxy -ErrorAction "SilentlyContinue")) {
                         For ($i=0,($null -ne (get-mailbox $newProxy -ErrorAction "SilentlyContinue")),$i++) {
                             $newProxy = $currentMailbox.primarysmtpaddress.split("@",2)[0] + $i +"@"+$onlineSMTP
-                            Write-Information "address in use, checking if $newProxy is available."
+                            Write-Output "address in use, checking if $newProxy is available."
                             } #End numeric incriment
                         } #found a non-existant address!
-                    Write-Information "Adding address $newProxy"
+                    Write-Output "Adding address $newProxy"
                     If (!$ReportOnly) {set-mailbox $currentMailbox.UserPrincipalName -Emailaddresses @{add = $newProxy}}
                     [string]$ProxyAddressUpdate = $newProxy
                     }
@@ -180,14 +180,14 @@ function Initialize-O365User
                 }
             
             #Check for MSOline licenses
-            Write-Information "verifying $target is synced"
+            Write-Output "verifying $target is synced"
             If ($NULL -eq ((Get-MsolUser -UserPrincipalName $target).ImmutableID)) {
                     [string]$mSOLLicenseUpdate = 'not a synced account'
                     write-warning "not a synced account!"
                     }
             
             If ($mSOLLicenseUpdate -ne 'not a synced account') {
-                Write-Information "Importing license information"
+                Write-Output "Importing license information"
                 $isLicensed = (Get-MsolUser -UserPrincipalName $target).isLicensed
                 If ($provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses) {
                     $provisioningStatus = (Get-MsolUser -UserPrincipalName $target).licenses.servicestatus[9].provisioningstatus
@@ -199,15 +199,15 @@ function Initialize-O365User
                 Try {
                     $licenseSplat = @{UserPrincipalName = $target}
                     If (!$isLicensed) {
-                        Write-Information "Adding license to import"
+                        Write-Output "Adding license to import"
                         If (!$ReportOnly) {Set-MsolUser -UserPrincipalName $target -UsageLocation US}
                         $licenseSplat +=@{AddLicenses = $MSOLAccountSkuId}
                         }
-                    Write-Information "Adding License Option to import"
+                    Write-Output "Adding License Option to import"
                     $lO = New-MsolLicenseOptions -AccountSkuId $MSOLAccountSkuId
                     $licenseSplat +=@{LicenseOptions = $lO}
                     If (!$ReportOnly) {
-                        Write-Information "Applying import back to account"
+                        Write-Output "Applying import back to account"
                         Set-MsolUserLicense @licenseSplat
                         }
                     [string]$mSOLLicenseUpdate = 'added'
@@ -222,7 +222,7 @@ function Initialize-O365User
             #Check each user to be a member of the groups
             $members=@()
             ForEach ($group in $groupList) {
-                Write-Information "checking membership of $group"
+                Write-Output "checking membership of $group"
                 try {
                     $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select-Object -ExpandProperty distinguishedname
                     }
@@ -230,7 +230,7 @@ function Initialize-O365User
 
                 If ($members -notcontains $currentUser.distinguishedname) {
                     IF (!$ReportOnly) {
-                        Write-Information "adding $currentUser.Name to $group"
+                        Write-Output "adding $currentUser.Name to $group"
                         Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser
                         }
                     $groupsUpdated = $true
@@ -238,7 +238,7 @@ function Initialize-O365User
                 } #End ForEach
 
             #Gather all smtp addresses and compare to online list
-            Write-Information "comparing smtp addresses to online list"
+            Write-Output "comparing smtp addresses to online list"
             $addr = $currentMailbox.emailaddresses | Where-Object {$_ -like "smtp:*"}
             $addr = ($addr | foreach-Object {($_.split("@",2))[1]})
             [System.Collections.ArrayList]$missingDomainList = @()
@@ -268,7 +268,7 @@ function Initialize-O365User
         } #End ForEach
 
     #Save and append log
-    Write-Information "dumping log file"
+    Write-Output "dumping log file"
     $settingsOutLog | export-csv -Path $SettingsOutFile -Force
 
 } #End Function
