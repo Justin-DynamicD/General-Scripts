@@ -157,8 +157,8 @@ function Initialize-O365User
             IF ($NULL -eq $existingSMTPcheck) {
                 Try {
                     $newProxy = $currentMailbox.primarysmtpaddress.split("@",2)[0] +"@"+$onlineSMTP
-                    If ($null -ne (get-mailbox $newProxy)) {
-                        For ($i=0,($null -ne (get-mailbox $newProxy)),$i++) {
+                    If ($null -ne (get-mailbox $newProxy -ErrorAction "SilentlyContinue")) {
+                        For ($i=0,($null -ne (get-mailbox $newProxy -ErrorAction "SilentlyContinue")),$i++) {
                             $newProxy = $currentMailbox.primarysmtpaddress.split("@",2)[0] + $i +"@"+$onlineSMTP
                             } #End numeric incriment
                         } #found a non-existant address!
