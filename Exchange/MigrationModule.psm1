@@ -691,11 +691,12 @@ function Complete-O365User
         $members=@()
         ForEach ($group in $groupList) {
             try {
+                $ifExist = Get-ADUser -filter {UserPrincipalName -eq $currentUser.MailboxName} -server $groupDomain
                 $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select-Object -ExpandProperty distinguishedname
                 }
             Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
 
-            If ($members -notcontains $currentUser.MailboxName) {
+            If ($members -notcontains $currentUser.MailboxName -and $ifExist) {
                 Write-Verbose "adding $($currentUser.MailboxName) to $group"
                 Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.MailboxName
                 $splatMailbox += @{GroupUpdated = "True"}
