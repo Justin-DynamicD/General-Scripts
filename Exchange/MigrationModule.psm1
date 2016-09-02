@@ -41,10 +41,10 @@ function Initialize-O365User
     #Generate Log filename
     if ($UserList -and !$SettingsOutFile) {
         $shortName = [io.path]::GetFileNameWithoutExtension($UserList)
-        $SettingsOutFile = $shortName + " Log " + (get-date -format m) + ".csv"
+        $SettingsOutFile = $shortName + " Init " + (get-date -format m) + ".csv"
         }
     ElseIf ($UserName -and !$SettingsOutFile) {
-        $SettingsOutFile = $UserName + " Log " + (get-date -format m) + ".csv"
+        $SettingsOutFile = $UserName + " Init " + (get-date -format m) + ".csv"
         }
     
     #Import UserList into a workingList
