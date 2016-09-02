@@ -26,7 +26,7 @@ function Initialize-O365User
     $globalCatalog = "jumboshrimp.mtvn.ad.viacom.com:3268"
     $onlineSMTP = "viacom.mail.onmicrosoft.com"
     $exchangeServer = "abfabnj50.mtvn.ad.viacom.com" #location of the Exchange cmdlets on local server
-    $MSOLAccountSkuId = "viacom:ENTERPRISEPACK"
+    $MSOLAccountSkuId = "viacom:ENTERPRISEPACK" #name of the license assigned to accounts
 
     #Validate parameter combinations are valid
     If ($UserName -and $UserList) {write-error "You can only specify either UserName or UserList, not both" -ErrorAction "Stop"}
