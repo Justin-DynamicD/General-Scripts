@@ -683,6 +683,16 @@ function Complete-O365User
             }
         }
 
+    #Gather GroupMembership for each group
+    [System.Collections.ArrayList]$groupMembers = @()
+    ForEach ($item in $groupList) {
+        Write-Output "Collecting Existing GroupMembership from $item"
+        $newentry = New-Object psobject
+        $newentry | Add-Member -Type NoteProperty -Name Name -Value $item
+        $newentry | Add-Member -Type NoteProperty -Name Members -Value (get-adgroupmember -identity $item -server $groupDomain -recursive | Select-Object -ExpandProperty DistinguishedName)
+        $groupMembers.add($newentry) | Out-Null
+        } # End ForEach Loop
+
     #begin user processing to reapply settings
     [int]$totalCount = $workingList.count
     [int]$currentCount = 0
@@ -714,22 +724,24 @@ function Complete-O365User
         Write-Verbose "Disabling Clutter for $($currentUser.MailboxName)"
         Set-Clutter -Identity $currentUser.MailboxName -Enable $false | Out-Null
 
-        #validate user is a member of the groups
-        $members=@()
-        ForEach ($group in $groupList) {
-            try {
-                $ifExist = Get-ADUser -filter {UserPrincipalName -eq $currentUser.MailboxName} -server $groupDomain
-                $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select-Object -ExpandProperty distinguishedname
-                }
-            Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
-
-            If ($members -notcontains $currentUser.MailboxName -and $ifExist) {
-                Write-Verbose "adding $($currentUser.MailboxName) to $group"
-                Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser.MailboxName
-                $splatMailbox += @{GroupUpdated = "True"}
-                } #End If-Match
-            } #End Group-ForEach
-
+        #Check each user to be a member of the groups if they are part of Paramount
+        $isParamount =  get-aduser -server $groupDomain -filter {UserPrincipalName -eq $currentUser.MailboxName} -ErrorAction "Stop"
+        If ($isParamount) {
+            ForEach ($group in $groupMembers) {
+                Write-Output "checking membership of $($group.Name)"
+                If ($group.members -notcontains $currentUser.distinguishedname -and !$ReportOnly) {                   
+                    Write-Output "adding $($currentUser.Name) to $($group.Name)"
+                    Add-ADGroupMember -Identity $group.Name -server $groupDomain -Members $currentUser    
+                    $groupsUpdated = $true
+                    } #End Match
+                Elseif ($group.members -notcontains $currentUser.distinguishedname -and $ReportOnly) {
+                    $groupsUpdated = $true
+                    }
+                } #End ForEach
+            }
+        Else {
+            Write-Output "$($currentUser.MailboxName) is not a member of the group domain."
+            }
         } #End CurrentUser-ForEach
 
 } #End Function
