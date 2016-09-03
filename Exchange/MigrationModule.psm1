@@ -102,6 +102,16 @@ function Initialize-O365User
     #Gather list of accepted Domains for comparison
     $mSOLAcceptedDomain = Get-AcceptedDomain | select-object -ExpandProperty DomainName
 
+    #Gather GroupMembership for each group
+    [System.Collections.ArrayList]$groupMembers = @()
+    ForEach ($item in $groupList) {
+        Write-Output "Collecting Existing GroupMembership from $item"
+        $newentry = New-Object psobject
+        $newentry | Add-Member -Type NoteProperty -Name Name -Value $item
+        $newentry | Add-Member -Type NoteProperty -Name Members -Value (get-adgroupmember -identity $item -server $groupDomain -recursive | Select-Object -ExpandProperty DistinguishedName)
+        $groupMembers.add($newentry) | Out-Null
+        } # End ForEach Loop
+
     #Begin per-user Loop and track progress
     [int]$totalCount = $workingList.count
     [int]$currentCount = 0
@@ -220,21 +230,16 @@ function Initialize-O365User
             
 
             #Check each user to be a member of the groups
-            $members=@()
-            ForEach ($group in $groupList) {
-                Write-Output "checking membership of $group"
-                try {
-                    $members = Get-ADGroupMember -Identity $group -server $groupDomain -Recursive | Select-Object -ExpandProperty distinguishedname
-                    }
-                Catch {Write-Error "cannot find group $group" -ErrorAction "Stop"}
-
-                If ($members -notcontains $currentUser.distinguishedname) {
-                    IF (!$ReportOnly) {
-                        Write-Output "adding $currentUser.Name to $group"
-                        Add-ADGroupMember -Identity $group -server $groupDomain -Members $currentUser
-                        }
+            ForEach ($group in $groupMembers) {
+                Write-Output "checking membership of $($group.Name)"
+                If ($group.members -notcontains $currentUser.distinguishedname -and !$ReportOnly) {                   
+                    Write-Output "adding $($currentUser.Name) to $($group.Name)"
+                    Add-ADGroupMember -Identity $group.Name -server $groupDomain -Members $currentUser    
                     $groupsUpdated = $true
                     } #End Match
+                Elseif ($group.members -notcontains $currentUser.distinguishedname -and $ReportOnly) {
+                    $groupsUpdated = $true
+                    }
                 } #End ForEach
 
             #Gather all smtp addresses and compare to online list
