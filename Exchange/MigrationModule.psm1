@@ -725,7 +725,7 @@ function Complete-O365User
         Set-Clutter -Identity $currentUser.MailboxName -Enable $false | Out-Null
 
         #Check each user to be a member of the groups if they are part of Paramount
-        $isParamount =  get-aduser -server $groupDomain -filter {UserPrincipalName -eq $currentUser.MailboxName} -ErrorAction "Stop"
+        $isParamount =  get-aduser -server $groupDomain -filter {UserPrincipalName -eq $currentUser.MailboxName}
         If ($isParamount) {
             ForEach ($group in $groupMembers) {
                 Write-Output "checking membership of $($group.Name)"
