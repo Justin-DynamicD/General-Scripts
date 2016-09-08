@@ -8,9 +8,10 @@ HostName=10.118.32.30
 AssociatedPrinterStartMinimized=N
 AssociatedPrinterClose=N
 AssociatedPrinterTimeout=0
-Security=CA400
+Security=Y
 SSLClientAuthentication=Y
 CertSelection=AUTOSELECT
+HostPortNumber=992
 [KeepAlive]
 KeepAliveTimeOut=0
 [Communication]
@@ -20,17 +21,17 @@ AutoConnect=N
 [5250]
 SessionType=Printer
 HostCodePage=037-U
-WorkStationID=[DJNumber]
+WorkStationID=[PNumber]
 PrinterType=IBM3812
 [Keyboard]
 CuaKeyboard=2
 Language=United-States
 IBMDefaultKeyboard=N
-DefaultKeyboard=C:\Users\cshare\AppData\Roaming\IBM\Client Access\Emulator\private\AS400.KMP
+DefaultKeyboard=C:\Program Files (x86)\IBM\Client Access\Emulator\Private\AS400.KMP
 [PrintSessionSetup5250]
 Wallpaper=C:\Program Files (x86)\IBM\Client Access\Emulator\printsessionsetup.bmp
 [LastExitView]
-A=3 56 50 896 492 3 11 14 400 0 IBM3270â€” 37
+A=3 78 78 682 512 3 9 14 400 0 IBM3270— 37
 [printers]
 printer=Client/[PNumber]#/Generic / Text Only,winspool,Client\[PNumber]#\Generic / Text Only
 CPI=10
