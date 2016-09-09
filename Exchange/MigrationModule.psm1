@@ -595,23 +595,14 @@ function Complete-O365User
 {
     <#
     .Synopsis
-    Short description
+    This function is used in order to complete migration batches and importing/applying te settings captured by move-O365User in batchmode.
     .DESCRIPTION
-    Long description
+    This function is used in order to complete migration batches and importing/applying te settings captured by move-O365User in batchmode.
+    It only needs to be run with batch migrations, as individual moves will complete automatically.
     .EXAMPLE
-    Example of how to use this cmdlet
-    .EXAMPLE
-    Another example of how to use this cmdlet
-    .INPUTS
-    Inputs to this cmdlet (if any)
-    .OUTPUTS
-    Output from this cmdlet (if any)
+    Complete-O365User -MigrationBatch "Migration Batch GroupC" -SettingsOutFile "Migration Batch GroupC Logs.csv" -OnlineCredentials (Get-Credentials)
     .NOTES
     General notes
-    .COMPONENT
-    The component this cmdlet belongs to
-    .FUNCTIONALITY
-    The functionality that best describes this cmdlet
     #>
 
     param (
@@ -619,11 +610,11 @@ function Complete-O365User
         [Parameter(Mandatory=$false)] 
         [string]$MigrationBatch,
 
-        # SettingsOutFile This specifies the filename to store batchmigration data into
+        # SettingsOutFile This specifies the filename to pull restore data from
         [Parameter(Mandatory=$true)] 
         [string]$SettingsOutFile,
 
-        # OnlineCredentials These are the credentials require to sign into your O365 tenant
+        # OnlineCredentials These are the credentials required to sign into your O365 tenant
         [Parameter(Mandatory=$true)]
         [System.Management.Automation.PSCredential]$OnlineCredentials
     )
@@ -639,7 +630,7 @@ function Complete-O365User
     #Load AD/MSOnline modules
     If (!(Get-module ActiveDirectory)) {
         Try {import-module ActiveDirectory}
-        catch {write-error "Cannot import ActiveDirecotry modules, please make sure they are available" -ErrorAction "Stop"}
+        catch {write-error "Cannot import ActiveDirectory module, please make sure it is available" -ErrorAction "Stop"}
         }    
 
     #Generate Migration Batch name if not provided
@@ -664,7 +655,7 @@ function Complete-O365User
         Catch {write-error "Cannot connect to O365" -ErrorAction "Stop"}
         }
     
-    Import-PSSession $mSOLSession -AllowClobber
+    $mSOLModule = Import-PSSession $mSOLSession -AllowClobber
     [bool]$mSOLActive = $true
     [bool]$sessionsImported = $true
 
@@ -677,9 +668,12 @@ function Complete-O365User
         If ($currentBatch.Status.value -like "Synced*") {
             Complete-MigrationBatch -Identity $currentBatch.Identity.Name
             while ((Get-MigrationBatch $MigrationBatch).Status.value -notlike "Completed*") {
-                Write-Output "$((Get-MigrationBatch $MigrationBatch).Status.value)..."
+                Write-Output "$MigrationBatch is $((Get-MigrationBatch $MigrationBatch).Status.value), sleeping for 60 seconds..."
                 Start-Sleep -seconds 60
                 } #End Wait
+            }
+        ElseIf ($currentBatch.Status.value -notlike "Completed*") {
+            Write-Error -Message "Batch $MigrationBatch is not in a synced or completed Status, cannot continue" -ErrorAction "Stop"
             }
         }
 
@@ -701,117 +695,51 @@ function Complete-O365User
         Write-Progress -Activity "Updating $($currentUser.MailboxName)" -PercentComplete (($currentCount / $totalCount)*100) -Status "updating..."
         
         #Define a hashtable to splat settings
+        Write-Output "Creating Settings table for $($currentUser.MailboxName)"
         $splatMailbox = @{Identity = $currentUser.MailboxName}   
 
         #update Storage Policy
-        Write-Verbose "Applying StorageQuotas to $($currentUser.MailboxName)"
         $DBSendQuota = ($currentUser.DBSendQuota).split(" ",3)[0] + ($currentUser.DBSendQuota).split(" ",3)[1]
         $DBReceiveQuota = ($currentUser.DBReceiveQuota).split(" ",3)[0] + ($currentUser.DBReceiveQuota).split(" ",3)[1]
         $DBWarning = ($currentUser.DBWarning).split(" ",3)[0] + ($currentUser.DBWarning).split(" ",3)[1]
+        Write-Output "Adding ProhibitSendQuota = $DBSendQuota"
         $splatMailbox += @{ProhibitSendQuota = $DBSendQuota}
+        Write-Output "Adding ProhibitSendReceiveQuota = $DBReceiveQuota"
         $splatMailbox += @{ProhibitSendReceiveQuota = $DBReceiveQuota}
+        Write-Output "Adding IssueWarningQuota = $DBWarning"
         $splatMailbox += @{IssueWarningQuota = $DBWarning}
 
         #Update RetentionPolicy and Deleteditemretention
+        Write-Output "Adding RetentionPolicy = $($currentUser.retentionPolicy)"
         $splatMailbox += @{RetentionPolicy = $currentUser.retentionPolicy}
+        Write-Output "Adding RetainDeletedItemsFor = 30"
         $splatMailbox += @{RetainDeletedItemsFor = 30}
 
         #Apply Settings to mailbox
-        write-verbose "Updating Mailbox with stored settings for $($currentUser.MailboxName)"
+        Write-Output "Updating Mailbox with stored settings for $($currentUser.MailboxName)"
         Set-mailbox $splatMailbox
 
         #Disable Clutter
-        Write-Verbose "Disabling Clutter for $($currentUser.MailboxName)"
+        Write-Output "Disabling Clutter for $($currentUser.MailboxName)"
         Set-Clutter -Identity $currentUser.MailboxName -Enable $false | Out-Null
 
-        #Check each user to be a member of the groups if they are part of Paramount
-        $isParamount =  get-aduser -server $groupDomain -filter {UserPrincipalName -eq $currentUser.MailboxName}
-        If ($isParamount) {
+        #Check each user to be a member of the groups if they are part of the group's domain
+        $isMember =  get-aduser -server $groupDomain -filter {UserPrincipalName -eq $currentUser.MailboxName}
+        If ($isMember) {
+            Write-Output "$($currentUser.MailboxName) is a member of the domain $groupDomain"
             ForEach ($group in $groupMembers) {
                 Write-Output "checking membership of $($group.Name)"
-                If ($group.members -notcontains $currentUser.distinguishedname -and !$ReportOnly) {                   
+                If ($group.members -notcontains $currentUser.distinguishedname) {                   
                     Write-Output "adding $($currentUser.Name) to $($group.Name)"
                     Add-ADGroupMember -Identity $group.Name -server $groupDomain -Members $currentUser    
                     $groupsUpdated = $true
                     } #End Match
-                Elseif ($group.members -notcontains $currentUser.distinguishedname -and $ReportOnly) {
-                    $groupsUpdated = $true
-                    }
                 } #End ForEach
             }
         Else {
-            Write-Output "$($currentUser.MailboxName) is not a member of the group domain."
+            Write-Output "$($currentUser.MailboxName) is not a member of the domain $groupDomain"
+            $groupsUpdated = $false
             }
         } #End CurrentUser-ForEach
 
 } #End Function
-
-function Add-ManagedFolder
-{
-    Param(
-        [Parameter(Mandatory=$True)]
-            [string]$TargetMailbox,
-        [Parameter(Mandatory=$True)]
-            [string]$FolderName,
-        [Parameter(Mandatory=$True)]
-            [string]$RetentionTag,
-        [Parameter(Mandatory=$False)]
-            [string]$AutoD = $True,
-        [Parameter(Mandatory=$False)]
-            [string]$EwsUri = "https://mail.office365.com/ews/exchange.asmx",
-        [Parameter(Mandatory=$False)]
-            [string]$ApiPath = "C:\Program Files\Microsoft\Exchange\Web Services\2.2\Microsoft.Exchange.WebServices.dll",
-        [Parameter(Mandatory=$False)]
-            [string]$Version = "Exchange2013_SP1"
-    )
-
-    $ImpersonationCreds = Get-Credential -Message "Enter Credentials for Account with Impersonation Role..."
-
-    Add-Type -Path $ApiPath
-
-    $ExchangeVersion = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::$Version
-    $Service = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService($ExchangeVersion)
-
-    $Creds = New-Object System.Net.NetworkCredential($ImpersonationCreds.UserName, $ImpersonationCreds.Password)   
-    $Service.Credentials = $Creds
-
-    if ($AutoD -eq $True) {
-        $Service.AutodiscoverUrl($TargetMailbox,{$True})  
-        "EWS URI = " + $Service.url
-    }
-    else {
-        $Uri=[system.URI] $EwsUri
-        $Service.Url = $uri
-    }
-
-    $Service.ImpersonatedUserId = New-Object Microsoft.Exchange.WebServices.Data.ImpersonatedUserId([Microsoft.Exchange.WebServices.Data.ConnectingIdType]::SmtpAddress, $TargetMailbox)
-
-    $Folder = New-Object Microsoft.Exchange.WebServices.Data.Folder($Service)  
-    $Folder.DisplayName = $FolderName
-    $Folder.FolderClass = "IPF.Note"
-
-    $FolderId= New-Object Microsoft.Exchange.WebServices.Data.FolderId([Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::MsgFolderRoot,$TargetMailbox)   
-    $EWSParentFolder = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($Service,$FolderId)
-
-    $FolderView = New-Object Microsoft.Exchange.WebServices.Data.FolderView(1)  
-    $SearchFilter = New-Object Microsoft.Exchange.WebServices.Data.SearchFilter+IsEqualTo([Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName,$FolderName)  
-    $FindFolderResults = $Service.FindFolders($EWSParentFolder.Id,$SearchFilter,$FolderView)
-
-    if ($FindFolderResults.TotalCount -eq 0) {  
-
-        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where-object {$_.DisplayName -eq $RetentionTag})
-
-        $Folder.PolicyTag = New-Object Microsoft.Exchange.WebServices.Data.PolicyTag($true,$Tag.RetentionId)
-        $Folder.Save($EWSParentFolder.Id)
-    }  
-    elseif ($FindFolderResults.TotalCount -eq 1) {  
-        Write-Verbose ("The folder '$FolderName' already exists in mailbox '$TargetMailbox'")
-        $Tag = ($Service.GetUserRetentionPolicyTags().RetentionPolicyTags | where-object {$_.DisplayName -eq $RetentionTag})
-        $Folder = $FindFolderResults[0]
-        $Folder.PolicyTag = New-Object Microsoft.Exchange.WebServices.Data.PolicyTag($true,$Tag.RetentionId)
-        $Folder.Save($EWSParentFolder.Id)
-    }
-    else {
-        Write-Verbose "found multiple instances of the desired folder"
-    }
-}
